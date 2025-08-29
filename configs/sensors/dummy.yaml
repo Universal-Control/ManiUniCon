@@ -1,0 +1,55 @@
+realsense:
+  _target_: maniunicon.sensors.dummy_realsense.DummyRealSenseSensor
+  frequency: ${sensor_frequency}
+  verbose: true
+
+  # Dummy-specific parameters
+  image_path: null  # Use white images by default, or specify path to custom image
+  default_depth: 1.0  # Default depth value in meters
+
+  camera_config:
+    camera_names:
+      camera_0: "dummy_serial_000"
+      camera_1: "dummy_serial_001"
+
+    multi_camera_get_max_k: ${get_max_k}
+    multi_camera_get_time_budget: 0.3
+    multi_camera_put_desired_frequency: 30
+
+    camera_0:
+      resolution: [640, 480]
+      fps: 30
+      single_camera_get_max_k: ${get_max_k}
+      single_camera_get_time_budget: 0.2
+      single_camera_put_desired_frequency: ${data.camera_config.multi_camera_put_desired_frequency}
+      transform: 
+        - [1.0, 0.0, 0.0, 0.32340303]
+        - [0.0, 1.0, 0.0, 0.43623387]
+        - [0.0, 0.0, 1.0, 0.685744]
+        - [0.0, 0.0, 0.0, 1.0]
+      transform_T: 
+        - [1.0, 0.0, 0.0]
+        - [0.0, 1.0, 0.0]
+        - [0.0, 0.0, 1.0]
+      pose:
+        position: [0.32340303, 0.43623387, 0.685744]
+        orientation: [0.07720632, -0.51042744, 0.77959561, -0.35458947]
+
+    camera_1:
+      resolution: [640, 480]
+      fps: 30
+      single_camera_get_max_k: ${get_max_k}
+      single_camera_get_time_budget: 0.2
+      single_camera_put_desired_frequency: ${data.camera_config.multi_camera_put_desired_frequency}
+      transform:
+        - [1.0, 0.0, 0.0, 0.37719663]
+        - [0.0, 1.0, 0.0, -0.54250405]
+        - [0.0, 0.0, 1.0, 0.45094918]
+        - [0.0, 0.0, 0.0, 1.0]
+      transform_T:
+        - [1.0, 0.0, 0.0]
+        - [0.0, 1.0, 0.0]
+        - [0.0, 0.0, 1.0]
+      pose:
+        position: [0.37719663, -0.54250405, 0.45094918]
+        orientation: [-0.41648648, 0.90101594, -0.09566628, 0.07454696]

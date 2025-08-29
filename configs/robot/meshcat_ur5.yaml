@@ -1,0 +1,36 @@
+_target_: maniunicon.core.robot.Robot
+name: "meshcat-ur5"
+robot_interface:
+  _target_: maniunicon.robot_interface.meshcat.MeshcatInterface
+  config:
+    urdf_path: "assets/ur5_urdf/robot.urdf"
+    urdf_package_dirs: ["assets/ur5_urdf"]
+    num_joints: 6
+    joint_limits:
+      min: [-6.28, -6.28, -6.28, -6.28, -6.28, -6.28]
+      max: [6.28, 6.28, 6.28, 6.28, 6.28, 6.28]
+    velocity_limits: [3.14, 3.14, 3.14, 3.14, 3.14, 3.14]  # rad/s
+    torque_limits: [150.0, 150.0, 150.0, 150.0, 150.0, 150.0]  # Nm
+    tcp_frame: wrist_3_link
+    init_qpos: [-3.5580, -1.3595, -2.1516, -1.0714, 1.7125, -0.41658]
+    init_configuration:
+      shoulder_pan_joint: -3.5580
+      shoulder_lift_joint: -1.3595
+      elbow_joint: -2.1516
+      wrist_1_joint: -1.0714
+      wrist_2_joint: 1.7125
+      wrist_3_joint: -0.41658
+shared_storage: none # to be replaced
+control_frequency: ${control_frequency}
+state_update_frequency: ${state_update_frequency}
+use_interpolator: true
+max_pos_speed: 0.25  # m/s
+max_rot_speed: 0.6  # rad/s
+ee_trans_mat: ${eval:'[[0, -1, 0], [-1, 0, 0], [0, 0, -1]]'}
+warn_on_late: true
+synchronized: ${synchronized}
+
+# Workspace bounds for safety constraints
+# Set any bound to null to ignore that dimension
+workspace_bounds:
+  enabled: false

@@ -1,0 +1,32 @@
+realsense:
+  _target_: maniunicon.sensors.realsense.RealSenseSensor
+  frequency: ${sensor_frequency}
+  verbose: true
+
+  camera_config:
+    camera_names:
+      camera_0: "243322073354"
+
+    multi_camera_get_max_k: ${get_max_k}
+    multi_camera_get_time_budget: 0.3
+    multi_camera_put_desired_frequency: 30
+
+    camera_0:
+      resolution: [640, 480]
+      fps: 30
+      single_camera_get_max_k: ${get_max_k}
+      single_camera_get_time_budget: 0.2
+      single_camera_put_desired_frequency: ${data.camera_config.multi_camera_put_desired_frequency}
+      display: false  # Set to true to enable display window
+      overlay_image: none  # Path to overlay image (e.g., "data/overlay.png") or "none" to disable
+      overlay_alpha: 0.3  # Alpha blending value for overlay (0.0 = transparent, 1.0 = opaque)
+      transform: none  # to be replaced
+      transform_T: none  # to be replaced
+      pose:
+        position: [-0.15281393, -0.42782652, 1.04246988]
+        orientation: [0.21607311, -0.976270928, 0.000276836672, -0.0144017304]
+      intrinsics:
+        fx: 605.55  # focal length x for L515 at 640x480
+        fy: 605.51  # focal length y for L515 at 640x480
+        cx: 326.28  # principal point x (center of image)
+        cy: 240.93  # principal point y (center of image)

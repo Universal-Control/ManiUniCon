@@ -1,0 +1,17 @@
+_target_: maniunicon.policies.QuestPolicy
+
+# Quest control parameters
+max_delta_pos: ${eval:'0.5 * 30 / ${policy_frequency}'}
+max_delta_rot: ${eval:'8.0 * 30 / ${policy_frequency}'}
+pos_scaling_factor: 1.0
+rot_scaling_factor: 0.5
+ee_trans_mat: ${robot.ee_trans_mat}
+control_interval: 1  # Number of action steps to send per update
+dt: ${eval:'1 / ${policy_frequency}'}  # Time step between actions (seconds)
+command_latency: 0.005  # seconds - latency for command execution
+record_dir: null  # Directory to save recordings (set to path to enable recording)
+workspace_bounds: ${robot.workspace_bounds}
+
+# These parameters are automatically passed by the main system
+shared_storage: none  # to be replaced
+reset_event: none  # to be replaced 

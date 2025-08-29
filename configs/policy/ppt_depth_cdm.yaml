@@ -1,0 +1,97 @@
+_target_: maniunicon.policies.torch_model.TorchModelPolicy
+
+frame_latency: ${eval:'1 / 30'}
+infer_latency: ${eval:'1 / 20'}
+steps_per_inference: 12 # expected openloop steps
+use_real_time_chunking: false
+enable_recording: true
+record_dir: ""
+device: ${device}
+synchronized: ${synchronized}
+
+model:
+  _target_: maniunicon.customize.policy_model.ppt_policy_model.PPTPolicyModel
+
+  domain: "train"  # domain of the policy, used for dataset and model selection
+  pretrained_model_path: ""
+
+  network:
+    # trunk transformer config
+    _target_: ppt_learning.models.policy.Policy
+    embed_dim: 64
+    no_trunk: true
+    num_blocks: 2 # num of blocks in the trunk transformer 
+    num_heads: 4 # num of heads in the trunk transformer
+    drop_path: 0.0 # drop path in the trunk transformer
+    use_modality_embedding: True
+    token_postprocessing: ${policy.model.head.token_postprocessing}
+    cross_stem_attention: False # use cross attention to combine state and action
+    weight_init_style: 'pytorch' # weight init
+    observation_horizon: 1
+    action_horizon: 16
+    openloop_steps: 4
+    action_dim : ${action_dim} # overwrite
+    temporal_agg: False # ACT-style temporal aggregation, not always work
+
+  head:
+    _target_: ppt_learning.models.policy_head.Diffusion
+    input_dim: ${eval:'2 *${policy.model.network.embed_dim}'} # 2 * embed_dim for state and depth
+    output_dim: ${action_dim} # overwrite
+    horizon: ${policy.model.network.action_horizon}
+    normalize_action: True
+    down_dims: [128, 256, 512]
+    noise_scheduler_type: "DDIM"
+    num_inference_steps: 10
+    token_postprocessing: "concat" # maxpool or meanpool the tokens
+    hist_horizon: 0 # whether predicting the hist action
+
+  stem:
+    modalities: ['state', 'depth'] # no 'language'
+    modality_embed_dim: ${policy.model.network.embed_dim}
+    normalize_state: True # normalize state vectors 
+    num_heads: 4 # num of heads in the perceiver transformer
+    dim_head: 16 # dim of head in the perceiver transformer
+    cross_attention: False # whether to use perceiver cross attention or not
+
+    # used as perceiver io to unify token sizes for each modality
+    crossattn_latent:
+      state: 1
+      depth: 1
+
+    depth:
+      _target_: ppt_learning.models.policy_stem.ResNet
+      resnet_model: 'resnet18'
+      output_dim: ${policy.model.network.embed_dim}
+      weights: "DEFAULT" # no weights para means no pre-trained weights are used.
+      finetune: true
+      depth_only: true
+      rgb_only: false
+
+    state:
+      _target_: ppt_learning.models.policy_stem.MLP
+      input_dim: ${state_dim} # ovewrite based on the dataset
+      output_dim: ${policy.model.network.embed_dim}
+      widths: [64, 128]
+
+obs_wrapper:
+  _target_: maniunicon.customize.obs_wrapper.ppt_depth_wrapper_cdm.PPTDepthWrapper
+  camera_config: ${data.camera_config}
+  state_keys: ["tcp_position", "tcp_orientation", "joint_positions", "gripper_state"]
+  num_cams: 1
+  depth_size: [504, 672] # target size of the depth model input, [height, width]
+  tar_size: [224, 224]
+  temporal_ensemble: false
+  temporal_stack: false
+  depth_model:
+    _target_: rgbddepth.dpt.RGBDDepth
+    encoder: 'vitl'
+    features: 256
+    out_channels: [256, 512, 1024, 1024]
+    load_pretrain_net: ""  # path to the pretrained camera depth model
+
+act_wrapper:
+  _target_: maniunicon.customize.act_wrapper.ppt_wrapper.PPTDiffWrapper
+  hist_action: 0  # number of historical actions to consider
+  action_horizon: ${policy.model.network.action_horizon} # ${policy.steps_per_inference}
+  control_mode: ${eval:"'cartesian' if ${robot.use_interpolator} else 'joint'"}
+  dt: ${policy.dt}

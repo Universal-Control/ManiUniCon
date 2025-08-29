@@ -1,0 +1,50 @@
+_target_: maniunicon.core.robot.Robot
+name: "meshcat-xarm6"
+robot_interface:
+  _target_: maniunicon.robot_interface.meshcat.MeshcatInterface
+  config:
+    urdf_path: "assets/xarm6_urdf/xarm6_robot_white.urdf"
+    urdf_package_dirs: ["assets/xarm6_urdf"]
+    num_joints: 6
+    joint_limits:
+      min: [-6.28, -2.059, -3.927, -6.28, -1.69297, -6.28]
+      max: [6.28, 2.0944, 0.19198, 6.28, 3.14, 6.28]
+    velocity_limits: [3.14, 3.14, 3.14, 3.14, 3.14, 3.14]  # rad/s
+    torque_limits: [150.0, 150.0, 150.0, 150.0, 150.0, 150.0]  # Nm
+    tcp_frame: link6
+    init_qpos: [-0.3, -0.4293, -0.5986, 0.0, 0.9896, -0.171]
+    init_configuration:
+      joint1: 0.014
+      joint2: -0.64
+      joint3: -0.39
+      joint4: 0.0
+      joint5: 1.0
+      joint6: 0.0
+shared_storage: none # to be replaced
+control_frequency: ${control_frequency}
+state_update_frequency: ${state_update_frequency}
+use_interpolator: true
+max_pos_speed: 0.25  # m/s
+max_rot_speed: 0.6  # rad/s
+ee_trans_mat: ${eval:'[[1, 0, 0], [0, -1, 0], [0, 0, -1]]'}
+warn_on_late: true
+synchronized: ${synchronized}
+
+# Workspace bounds for safety constraints
+# Set any bound to null to ignore that dimension
+workspace_bounds:
+  enabled: false
+  position:
+    x_min: 0.2529
+    x_max: 0.3528
+    y_min: -0.2414
+    y_max: 0.2036
+    z_min: 0.2833
+    z_max: 0.3633
+  orientation:
+    x_min: 3.1351
+    x_max: 3.1351
+    y_min: -0.0377
+    y_max: -0.0377
+    z_min: -0.1289
+    z_max: -0.1289

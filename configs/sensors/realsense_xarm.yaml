@@ -1,0 +1,36 @@
+realsense:
+  _target_: maniunicon.sensors.realsense.RealSenseSensor
+  frequency: ${sensor_frequency}
+  verbose: true
+  camera_config:
+    camera_names:
+      camera_0: "215222074795"
+      camera_1: "243322074596"
+
+    multi_camera_get_max_k: ${get_max_k}
+    multi_camera_get_time_budget: 0.3
+    multi_camera_put_desired_frequency: 30
+
+    camera_0:
+      resolution: [640, 480]
+      fps: 30
+      single_camera_get_max_k: ${get_max_k}
+      single_camera_get_time_budget: 0.2
+      single_camera_put_desired_frequency: ${data.camera_config.multi_camera_put_desired_frequency}
+      transform: none  # to be replaced
+      transform_T: none  # to be replaced
+      pose:
+        position: [0.32340303, 0.43623387, 0.685744]
+        orientation: [ 0.07720632, -0.51042744, 0.77959561, -0.35458947]
+
+    camera_1:
+      resolution: [640, 480]
+      fps: 30
+      single_camera_get_max_k: ${get_max_k}
+      single_camera_get_time_budget: 0.2
+      single_camera_put_desired_frequency: ${data.camera_config.multi_camera_put_desired_frequency}
+      transform: none  # to be replaced
+      transform_T: none  # to be replaced
+      pose:
+        position: [0.37719663, -0.54250405,  0.45094918]
+        orientation: [-0.41648648,  0.90101594, -0.09566628,  0.07454696]

@@ -1,0 +1,48 @@
+_target_: maniunicon.core.robot.Robot
+name: "xarm6"
+robot_interface: 
+  _target_: maniunicon.robot_interface.xarm6_robotiq.XArm6RobotiqInterface
+  config:
+    urdf_path: "assets/xarm6_urdf/xarm6_robot_white.urdf"
+    urdf_package_dirs: ["assets/xarm6_urdf"]
+    num_joints: 6
+    init_qpos: [-0.3, -0.4293, -0.5986, 0.0, 0.9896, -0.171]
+    joint_limits:
+      min: [-6.28, -2.059, -3.927, -6.28, -1.69297, -6.28]
+      max: [6.28, 2.0944, 0.19198, 6.28, 3.14, 6.28]
+    velocity_limits: [3.14, 3.14, 3.14, 3.14, 3.14, 3.14]  # rad/s
+    torque_limits: [150.0, 150.0, 150.0, 150.0, 150.0, 150.0]  # Nm
+    tcp_frame: link6
+    # Xarm6-specific configuration
+    ip: "192.168.1.243"  # Robot IP address
+    velocity: 0.5  # Default velocity for movements
+    acceleration: 0.5  # Default acceleration for movements
+    dt: ${eval:'1 / ${control_frequency}'}  # Control timestep (125Hz)
+shared_storage: none # to be replaced
+control_frequency: ${control_frequency}
+state_update_frequency: ${state_update_frequency}
+use_interpolator: true
+max_pos_speed: 0.25  # m/s
+max_rot_speed: 0.6  # rad/s
+ee_trans_mat: ${eval:'[[1, 0, 0], [0, -1, 0], [0, 0, -1]]'}
+warn_on_late: true
+synchronized: ${synchronized}
+
+# Workspace bounds for safety constraints
+# Set any bound to null to ignore that dimension
+workspace_bounds:
+  enabled: true
+  position:
+    x_min: null  # Set to actual values from workspace recorder
+    x_max: null
+    y_min: null
+    y_max: null
+    z_min: null
+    z_max: null
+  orientation:  # Using X,Y,Z notation (X=roll, Y=pitch, Z=yaw)
+    x_min: null  # roll bounds
+    x_max: null
+    y_min: null  # pitch bounds
+    y_max: null
+    z_min: null  # yaw bounds
+    z_max: null

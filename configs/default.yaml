@@ -1,0 +1,35 @@
+sensor_frequency: 30
+policy_frequency: 30
+control_frequency: 125
+state_update_frequency: 30
+get_max_k: 3
+device: cuda:0
+synchronized: false  # Enable synchronized inference and execution
+max_record_steps: 5000 # Maximum number of steps to record (e.g., 5000 steps = 5000 * 1/30 = 166.67 seconds)
+
+num_joints: 6
+state_dim: 14 # 20
+action_dim: 7 # 6 joints + 1 gripper
+
+defaults:
+  - robot: ur5
+  - policy: ppt_depth
+  - sensors: realsense_ur
+  - _self_
+
+policy:
+  dt: ${eval:'1 / ${policy_frequency}'}
+  shared_storage: none # to be replaced
+
+data:
+  robot_state_config:
+    num_joints: ${num_joints}
+    get_max_k: ${get_max_k}
+    get_time_budget: 0.2
+    put_desired_frequency: ${state_update_frequency}
+
+  robot_action_config:
+    num_joints: ${num_joints}
+    buffer_size: 256
+
+  camera_config: ${sensors.realsense.camera_config}

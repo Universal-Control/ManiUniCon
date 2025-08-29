@@ -1,0 +1,51 @@
+_target_: maniunicon.core.robot.Robot
+name: "ur5"
+robot_interface:
+  _target_: maniunicon.robot_interface.ur5_robotiq.UR5RobotiqInterface
+  config:
+    urdf_path: "assets/ur5_urdf/robot.urdf"
+    urdf_package_dirs: ["assets/ur5_urdf"]
+    num_joints: 6
+    init_qpos: [-3.5580, -1.3595, -2.1516, -1.0714, 1.7125, -0.41658]
+    init_qvel: 1.05  # the q velocity for moving to the initial position
+    joint_limits:
+      min: [-6.28, -3.14, -3.14, -3.14, -3.14, -3.14]
+      max: [6.28, 3.14, 3.14, 3.14, 3.14, 3.14]
+    velocity_limits: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # rad/s
+    torque_limits: [150.0, 150.0, 150.0, 150.0, 150.0, 150.0]  # Nm
+    tcp_frame: wrist_3_link
+    # UR5-specific configuration
+    ip: "192.168.124.243"  # Robot IP address
+    velocity: 0.5  # Default velocity for movements
+    acceleration: 0.5  # Default acceleration for movements
+    lookahead_time: 0.1  # Lookahead time for trajectory following
+    gain: 300  # Servo gain
+    dt: ${eval:'1 / ${control_frequency}'}  # Control timestep (125Hz)
+shared_storage: none # to be replaced
+control_frequency: ${control_frequency}
+state_update_frequency: ${state_update_frequency}
+ee_trans_mat: ${eval:'[[0, -1, 0], [-1, 0, 0], [0, 0, -1]]'}
+use_interpolator: true
+max_pos_speed: 0.25  # m/s
+max_rot_speed: 0.6  # rad/s
+warn_on_late: true
+synchronized: ${synchronized}
+
+# Workspace bounds for safety constraints
+# Set any bound to null to ignore that dimension
+workspace_bounds:
+  enabled: true
+  position:
+    x_min: null
+    x_max: null
+    y_min: null
+    y_max: null
+    z_min: null
+    z_max: null
+  orientation:
+    x_min: null
+    x_max: null
+    y_min: null
+    y_max: null
+    z_min: null
+    z_max: null

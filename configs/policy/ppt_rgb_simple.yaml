@@ -1,0 +1,81 @@
+_target_: maniunicon.policies.torch_model.TorchModelPolicy
+
+frame_latency: ${eval:'1 / 30'}
+infer_latency: ${eval:'1 / 20'}
+steps_per_inference: 6 # expected openloop steps
+device: ${device}
+synchronized: ${synchronized}
+
+model:
+  _target_: maniunicon.customize.policy_model.ppt_policy_model.PPTPolicyModel
+
+  domain: "Datasets" # domain of the policy, used for dataset and model selection
+  pretrained_model_path: "pretrained_weights/policy/rgb/model_1950.pth" # path/to/pretrained/model.pth
+
+  network:
+    # trunk transformer config
+    _target_: ppt_learning.models.policy.Policy
+    embed_dim: 128
+    num_blocks: 4 # num of blocks in the trunk transformer 
+    num_heads: 8 # num of heads in the trunk transformer
+    drop_path: 0.0 # drop path in the trunk transformer
+    no_trunk: True
+    use_modality_embedding: False
+    token_postprocessing: ${policy.model.head.token_postprocessing}
+    cross_stem_attention: False # use cross attention to combine state and action
+    weight_init_style: "pytorch" # weight init
+    observation_horizon: 1
+    action_horizon: 8
+    action_dim: ${action_dim} # overwrite based on dataset
+
+  head:
+    _target_: ppt_learning.models.policy_head.Diffusion
+    input_dim: 256
+    output_dim: ${action_dim} # overwrite based on dataset
+    horizon: ${policy.model.network.action_horizon}
+    normalize_action: True
+    down_dims: [128, 256, 512]
+    noise_scheduler_type: "DDIM"
+    num_inference_steps: 15
+    token_postprocessing: "concat"
+    hist_horizon: 0 # whether predicting the hist action
+
+  stem:
+    modalities: ["state", "image"] # no 'language'
+    modality_embed_dim: ${policy.model.network.embed_dim}
+    num_heads: 8 # num of heads in the trunk transformer
+    dim_head: 32 # dim of head in the trunk transformer
+    normalize_state: True # normalize state vectors 
+    cross_attention: False # whether to use cross attention or not
+
+    # used as perceiver io to unify token sizes for each modality
+    crossattn_latent:
+      state: 1
+      image: 2
+
+    image:
+      _target_: ppt_learning.models.policy_stem.ResNet
+      resnet_model: "resnet18"
+      output_dim: ${policy.model.network.embed_dim}
+      weights: "DEFAULT" # no weights para means no pre-trained weights are used.
+      finetune: True
+
+    # implement tokenization for state
+    state:
+      _target_: ppt_learning.models.policy_stem.MLP
+      input_dim: ${state_dim} # ovewrite based on the dataset
+      output_dim: ${policy.model.network.embed_dim}
+      widths: [128, 256]
+
+obs_wrapper:
+  _target_: maniunicon.customize.obs_wrapper.ppt_rgb_wrapper.PPTImageWrapper
+  camera_config: ${data.camera_config}
+  state_keys: ["tcp_position", "tcp_orientation", "joint_positions", "joint_velocities", "gripper_state"]
+  num_cams: 2
+
+act_wrapper:
+  _target_: maniunicon.customize.act_wrapper.chunk_wrapper.ActionChunkWrapper
+  hist_action: 0  # number of historical actions to consider
+  action_horizon: ${policy.model.network.action_horizon} # ${policy.steps_per_inference}
+  control_mode: cartesian
+  dt: ${policy.dt}

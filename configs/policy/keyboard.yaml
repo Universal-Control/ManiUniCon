@@ -1,0 +1,17 @@
+_target_: maniunicon.policies.KeyboardPolicy
+
+# Keyboard control parameters
+position_step: ${eval:'0.005 * 30 / ${policy_frequency}'}  # meters - step size for position movements
+orientation_step: ${eval:'0.02 * 30 / ${policy_frequency}'}  # radians - step size for orientation movements
+joint_step: ${eval:'0.01 * 30 / ${policy_frequency}'}  # radians - step size for joint movements
+num_joints: ${num_joints}  # Number of robot joints (from default config)
+control_interval: 1  # Number of action steps to send per update
+dt: ${eval:'1 / ${policy_frequency}'}  # Time step between actions (seconds)
+command_latency: 0.005  # seconds - latency for command execution
+synchronized: ${synchronized}
+record_dir: null  # Directory to save recordings (set to path to enable recording)
+workspace_bounds: ${robot.workspace_bounds}
+
+# These parameters are automatically passed by the main system
+shared_storage: none  # to be replaced
+reset_event: none  # to be replaced 
