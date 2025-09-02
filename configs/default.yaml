@@ -7,7 +7,7 @@ device: cuda:0
 synchronized: false  # Enable synchronized inference and execution
 max_record_steps: 5000 # Maximum number of steps to record (e.g., 5000 steps = 5000 * 1/30 = 166.67 seconds)
 
-num_joints: 6
+num_joints: ${robot.robot_interface.config.num_joints}
 state_dim: 14 # 20
 action_dim: 7 # 6 joints + 1 gripper
 
