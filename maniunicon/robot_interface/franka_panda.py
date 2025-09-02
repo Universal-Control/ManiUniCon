@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""Franka Panda robot interface with direct connection management."""
+"""Franka Panda robot interface using franky library."""
 
 import time
 import traceback
@@ -14,15 +14,17 @@ from maniunicon.utils.ik_solver import IKSolver
 from maniunicon.utils.shared_memory.shared_storage import RobotAction, RobotState
 
 try:
-    import franka_py
-    FRANKA_AVAILABLE = True
+    from franky import Affine, CartesianMotion, JointPositions, Motion, Robot, Gripper
+    from franky import RobotState as FrankyRobotState
+    from franky import Measure
+    FRANKY_AVAILABLE = True
 except ImportError:
-    FRANKA_AVAILABLE = False
-    print("franka_py not installed. Please install it to use Franka Panda interface.")
+    FRANKY_AVAILABLE = False
+    print("franky not installed. Please install it with 'pip install franky-panda'")
 
 
 class FrankaPandaInterface(RobotInterface):
-    """Franka Panda robot interface with direct connection management."""
+    """Franka Panda robot interface using franky library."""
 
     def __init__(self, config: Dict[str, Any]):
         """Initialize the Franka Panda robot interface.
@@ -33,9 +35,10 @@ class FrankaPandaInterface(RobotInterface):
         super().__init__(config)
         
         # Extract Franka-specific config
-        self.ip = config.get("ip", "172.16.0.2")
-        self.velocity = config.get("velocity", 0.5)
-        self.acceleration = config.get("acceleration", 0.5)
+        self.ip = config.get("ip", "172.16.0.12")
+        self.velocity_rel = config.get("velocity", 0.2)  # Relative velocity [0-1]
+        self.acceleration_rel = config.get("acceleration", 0.1)  # Relative acceleration [0-1]
+        self.jerk_rel = config.get("jerk", 0.01)  # Relative jerk [0-1]
         self.dt = config.get("dt", 1.0 / 1000.0)  # Default 1kHz control rate
         
         # Franka Panda has 7 joints
@@ -66,17 +69,24 @@ class FrankaPandaInterface(RobotInterface):
         
     def connect(self) -> bool:
         """Connect to the Franka Panda robot."""
-        if not FRANKA_AVAILABLE:
-            print("franka_py is not installed. Cannot connect to Franka Panda.")
+        if not FRANKY_AVAILABLE:
+            print("franky is not installed. Cannot connect to Franka Panda.")
             return False
             
         try:
-            # Connect to Franka Panda robot
-            self.robot = franka_py.FrankaArm(self.ip)
+            # Connect to Franka Panda robot using franky
+            self.robot = Robot(self.ip)
+            self.robot.relative_dynamics_factor = 0.2  # Safety factor for dynamics
+            
+            # Set default velocity, acceleration and jerk
+            self.robot.velocity_rel = self.velocity_rel
+            self.robot.acceleration_rel = self.acceleration_rel
+            self.robot.jerk_rel = self.jerk_rel
             
             # Connect to gripper
             try:
-                self.gripper = franka_py.FrankaGripper(self.ip)
+                self.gripper = Gripper(self.ip)
+                self.gripper.max_width = 0.08  # 80mm max width
                 self.gripper.open()
                 self._gripper_state = np.array([0.0])
             except Exception as e:
@@ -86,12 +96,16 @@ class FrankaPandaInterface(RobotInterface):
             # Initialize IK solver
             self.ik_solver = IKSolver(self.config)
             
-            # Set default collision behavior
+            # Set collision thresholds for safety
             self.robot.set_collision_behavior(
-                lower_torque_thresholds_nominal=[20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0],
-                upper_torque_thresholds_nominal=[20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0],
-                lower_force_thresholds_nominal=[10.0, 10.0, 10.0, 10.0, 10.0, 10.0],
-                upper_force_thresholds_nominal=[20.0, 20.0, 20.0, 20.0, 20.0, 20.0]
+                [20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0],  # lower_torque_thresholds
+                [20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0],  # upper_torque_thresholds
+                [20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0],  # lower_torque_thresholds_acceleration
+                [20.0, 20.0, 18.0, 18.0, 16.0, 14.0, 12.0],  # upper_torque_thresholds_acceleration
+                [10.0, 10.0, 10.0, 10.0, 10.0, 10.0],  # lower_force_thresholds
+                [20.0, 20.0, 20.0, 20.0, 20.0, 20.0],  # upper_force_thresholds
+                [10.0, 10.0, 10.0, 10.0, 10.0, 10.0],  # lower_force_thresholds_acceleration
+                [20.0, 20.0, 20.0, 20.0, 20.0, 20.0]   # upper_force_thresholds_acceleration
             )
             
             self._is_connected = True
@@ -109,14 +123,9 @@ class FrankaPandaInterface(RobotInterface):
     def disconnect(self) -> bool:
         """Disconnect from the Franka Panda robot."""
         try:
-            if self.robot is not None:
-                self.robot.close()
-                self.robot = None
-                
-            if self.gripper is not None:
-                self.gripper.close()
-                self.gripper = None
-                
+            # franky handles disconnection automatically
+            self.robot = None
+            self.gripper = None
             self.ik_solver = None
             self._is_connected = False
             print("Disconnected from Franka Panda robot")
@@ -136,8 +145,11 @@ class FrankaPandaInterface(RobotInterface):
                 init_qpos = self.config.get("init_qpos", 
                     [0, -0.785, 0, -2.356, 0, 1.571, 0.785])
                 
+                # Create joint motion
+                motion = JointPositions(init_qpos)
+                
                 # Move to initial position
-                self.robot.move_to_joint_positions(init_qpos)
+                self.robot.move(motion)
                 
                 # Open gripper
                 if self.gripper is not None:
@@ -156,7 +168,8 @@ class FrankaPandaInterface(RobotInterface):
         if self.robot is not None:
             try:
                 print(f"Moving to joint positions {joint_positions}")
-                self.robot.move_to_joint_positions(joint_positions.tolist())
+                motion = JointPositions(joint_positions.tolist())
+                self.robot.move(motion)
                 print(f"Moved to joint positions {joint_positions}")
                 return True
             except Exception as e:
@@ -170,16 +183,22 @@ class FrankaPandaInterface(RobotInterface):
             raise RuntimeError("Robot is not connected")
             
         try:
-            # Get robot state
-            state = self.robot.get_robot_state()
+            # Get robot state from franky
+            state = self.robot.state
             
             # Extract joint information
             joint_positions = np.array(state.q)
             joint_velocities = np.array(state.dq)
             joint_torques = np.array(state.tau_J)
             
-            # Get TCP pose
-            tcp_position, tcp_orientation = self.forward_kinematics(joint_positions)
+            # Get TCP pose (franky provides O_T_EE as 4x4 matrix)
+            ee_pose = np.array(state.O_T_EE).reshape(4, 4)
+            tcp_position = ee_pose[:3, 3]
+            
+            # Convert rotation matrix to quaternion
+            from scipy.spatial.transform import Rotation
+            rotation = Rotation.from_matrix(ee_pose[:3, :3])
+            tcp_orientation = rotation.as_quat()  # [x, y, z, w]
             
             # Get gripper state
             if self.gripper is not None:
@@ -220,50 +239,54 @@ class FrankaPandaInterface(RobotInterface):
             if action.control_mode == "joint":
                 # Direct joint control
                 if action.joint_positions is not None:
-                    # Position control
-                    self.robot.move_to_joint_positions(
-                        action.joint_positions.tolist(),
-                        time_to_go=self.dt
-                    )
+                    # Position control using franky
+                    motion = JointPositions(action.joint_positions.tolist())
+                    # For continuous control, use async move
+                    self.robot.move_async(motion, asynchronous=True)
+                    
                 elif action.joint_velocities is not None:
-                    # Velocity control
-                    self.robot.set_joint_velocities(action.joint_velocities.tolist())
+                    # Velocity control - franky doesn't have direct velocity control
+                    # We can approximate it using position control with small timesteps
+                    current_q = np.array(self.robot.state.q)
+                    target_q = current_q + action.joint_velocities * self.dt
+                    
+                    # Clip to joint limits
+                    target_q = np.clip(target_q, self.joint_limits["min"], self.joint_limits["max"])
+                    
+                    motion = JointPositions(target_q.tolist())
+                    self.robot.move_async(motion, asynchronous=True)
+                    
                 elif action.joint_torques is not None:
-                    # Torque control
-                    self.robot.set_joint_torques(action.joint_torques.tolist())
+                    # Torque control - franky doesn't expose direct torque control
+                    # This would require libfranka's torque interface
+                    print("Direct torque control not supported in franky interface")
+                    return False
                     
             elif action.control_mode == "cartesian":
                 # Cartesian control
                 if (action.tcp_position is not None and 
                     action.tcp_orientation is not None):
                     
-                    # Get current joint positions
-                    state = self.robot.get_robot_state()
-                    current_q = np.array(state.q)
+                    # Convert quaternion to rotation matrix
+                    from scipy.spatial.transform import Rotation
+                    rotation = Rotation.from_quat(action.tcp_orientation)
+                    rotation_matrix = rotation.as_matrix()
                     
-                    # Solve IK
-                    joint_solution = self.inverse_kinematics(
-                        action.tcp_position,
-                        action.tcp_orientation,
-                        current_q
-                    )
+                    # Create affine transformation
+                    affine = Affine(action.tcp_position.tolist(), rotation_matrix.tolist())
                     
-                    if joint_solution is not None:
-                        # Send joint command
-                        self.robot.move_to_joint_positions(
-                            joint_solution.tolist(),
-                            time_to_go=self.dt
-                        )
-                    else:
-                        print("IK solution failed")
-                        return False
+                    # Create Cartesian motion
+                    motion = CartesianMotion(affine)
+                    
+                    # Execute motion
+                    self.robot.move_async(motion, asynchronous=True)
             
             # Handle gripper control
             if action.gripper_state is not None and self.gripper is not None:
                 if action.gripper_state.item():  # action is close
                     if not self._gripper_state.item():  # current is open
                         print("Closing gripper")
-                        self.gripper.grasp(width=0.0, force=40.0)
+                        self.gripper.grasp(0.01, 40.0)  # 10mm width, 40N force
                         self._gripper_state = action.gripper_state
                 else:  # action is open
                     if self._gripper_state.item():  # current is closed
@@ -290,9 +313,8 @@ class FrankaPandaInterface(RobotInterface):
             
         try:
             if self.robot is not None:
-                state = self.robot.get_robot_state()
-                # Check for errors in robot state
-                return state.robot_mode != franka_py.RobotMode.kMove
+                # Check if robot has errors
+                return self.robot.has_errors()
             return self._error_state
         except:
             return True
@@ -304,7 +326,7 @@ class FrankaPandaInterface(RobotInterface):
             
         try:
             if self.robot is not None:
-                self.robot.automatic_error_recovery()
+                self.robot.recover_from_errors()
                 self._error_state = False
                 return True
             return False
@@ -343,26 +365,31 @@ class FrankaPandaInterface(RobotInterface):
             raise RuntimeError("Robot is not connected")
             
         try:
+            # Use franky's kinematics
+            kinematics = self.robot.get_kinematics()
+            ee_pose = kinematics.forward(joint_positions.tolist())
+            
+            # Extract position
+            tcp_position = np.array([ee_pose.translation.x, 
+                                     ee_pose.translation.y, 
+                                     ee_pose.translation.z])
+            
+            # Convert rotation to quaternion
+            from scipy.spatial.transform import Rotation
+            rotation_matrix = np.array(ee_pose.rotation).reshape(3, 3)
+            rotation = Rotation.from_matrix(rotation_matrix)
+            tcp_orientation = rotation.as_quat()  # [x, y, z, w]
+            
+            return tcp_position, tcp_orientation
+                    
+        except Exception as e:
+            # Fallback to IK solver if available
             if self.ik_solver is not None:
                 return self.ik_solver.get_tcp_pose(joint_positions)
             else:
-                # Fallback: use robot's built-in FK if available
-                if self.robot is not None:
-                    pose = self.robot.forward_kinematics(joint_positions.tolist())
-                    # Convert pose matrix to position and quaternion
-                    position = pose[:3, 3]
-                    # Convert rotation matrix to quaternion
-                    from scipy.spatial.transform import Rotation
-                    rotation = Rotation.from_matrix(pose[:3, :3])
-                    quaternion = rotation.as_quat()  # [x, y, z, w]
-                    return position, quaternion
-                else:
-                    raise RuntimeError("No FK solver available")
-                    
-        except Exception as e:
-            print(f"Error in forward kinematics: {e}")
-            self._error_state = True
-            raise
+                print(f"Error in forward kinematics: {e}")
+                self._error_state = True
+                raise
     
     def inverse_kinematics(
         self,
@@ -384,33 +411,32 @@ class FrankaPandaInterface(RobotInterface):
             raise RuntimeError("Robot is not connected")
             
         try:
-            if self.ik_solver is not None:
-                # Use generic IK solver
-                joint_solution, success = self.ik_solver.solve(
-                    target_position=target_position,
-                    target_orientation=target_orientation,
-                    dt=self.dt,
-                    current_q=current_q,
-                )
-                return joint_solution if success else None
+            # Convert quaternion to rotation matrix
+            from scipy.spatial.transform import Rotation
+            rotation = Rotation.from_quat(target_orientation)
+            rotation_matrix = rotation.as_matrix()
+            
+            # Create affine transformation
+            affine = Affine(target_position.tolist(), rotation_matrix.tolist())
+            
+            # Use franky's inverse kinematics
+            kinematics = self.robot.get_kinematics()
+            joint_solution = kinematics.inverse(affine.matrix(), current_q.tolist())
+            
+            if joint_solution is not None:
+                return np.array(joint_solution)
             else:
-                # Fallback: use robot's built-in IK if available
-                if self.robot is not None and hasattr(self.robot, 'inverse_kinematics'):
-                    # Convert quaternion to rotation matrix
-                    from scipy.spatial.transform import Rotation
-                    rotation = Rotation.from_quat(target_orientation)
-                    rotation_matrix = rotation.as_matrix()
-                    
-                    # Create 4x4 transformation matrix
-                    pose = np.eye(4)
-                    pose[:3, :3] = rotation_matrix
-                    pose[:3, 3] = target_position
-                    
-                    # Solve IK
-                    joint_solution = self.robot.inverse_kinematics(pose, current_q.tolist())
-                    return np.array(joint_solution) if joint_solution is not None else None
+                # Fallback to IK solver if franky IK fails
+                if self.ik_solver is not None:
+                    joint_solution, success = self.ik_solver.solve(
+                        target_position=target_position,
+                        target_orientation=target_orientation,
+                        dt=self.dt,
+                        current_q=current_q,
+                    )
+                    return joint_solution if success else None
                 else:
-                    print("No IK solver available")
+                    print("IK solution not found")
                     return None
                     
         except Exception as e:
