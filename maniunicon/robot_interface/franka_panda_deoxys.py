@@ -39,7 +39,10 @@ class FrankaPandaDeoxysInterface(RobotInterface):
         super().__init__(config)
         
         # Extract deoxys-specific config
-        self.deoxys_config_path = config.get("deoxys_config", "charmander.yml")
+        self.deoxys_config_path = config.get("deoxys_config", None)
+        assert self.deoxys_config_path is not None, "deoxys_config_path is not set"
+        assert os.path.exists(self.deoxys_config_path), "deoxys_config_path does not exist"
+
         self.control_freq = config.get("control_freq", 20.0)  # Hz
         self.state_freq = config.get("state_freq", 100.0)  # Hz
         self.use_visualizer = config.get("use_visualizer", False)

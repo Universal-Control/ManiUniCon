@@ -1,0 +1,92 @@
+_target_: maniunicon.core.robot.Robot
+name: "franka_panda"
+robot_interface:
+  _target_: maniunicon.robot_interface.franka_panda_deoxys.FrankaPandaDeoxysInterface
+  config:
+    # Robot model configuration
+    urdf_path: "assets/franka_panda_urdf/panda.urdf"
+    urdf_package_dirs: ["assets/franka_panda_urdf"]
+    num_joints: 7
+    
+    # Initial joint configuration (neutral pose)
+    init_qpos: [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]
+    init_qvel: 1.0  # Velocity for moving to initial position
+    
+    # Joint limits for Franka Panda (in radians)
+    joint_limits:
+      min: [-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973]
+      max: [2.8973, 1.7628, 2.8973, -0.0698, 2.8973, 3.7525, 2.8973]
+    
+    # Velocity limits (rad/s)
+    velocity_limits: [2.175, 2.175, 2.175, 2.175, 2.610, 2.610, 2.610]
+    
+    # Torque limits (Nm)
+    torque_limits: [87.0, 87.0, 87.0, 87.0, 12.0, 12.0, 12.0]
+    
+    # TCP frame
+    tcp_frame: panda_hand
+    
+    # Deoxys-specific configuration
+    deoxys_config: "charmander.yml"  # NOTE: WRITE THE PATH TO THE DEOXYS ROBOT CONFIG FILE HERE.
+    controller_type: "OSC_POSE"  # Default controller: OSC_POSE, OSC_POSITION, JOINT_POSITION
+    controller_config: "osc-pose-controller.yml"  # Controller config file
+    
+    # Control parameters
+    control_freq: 20.0  # Policy control frequency (Hz)
+    state_freq: 100.0  # State update frequency (Hz)
+    use_visualizer: false  # Enable visualizer
+    
+    # Action scaling for OSC control
+    action_scale:
+      translation: 0.05  # Scale for position commands (m)
+      rotation: 0.05  # Scale for rotation commands (rad)
+    
+    # Control timestep
+    dt: ${eval:'1 / ${control_frequency}'}
+
+# Shared storage configuration
+shared_storage: none  # to be replaced
+
+# System frequencies
+control_frequency: ${control_frequency}
+state_update_frequency: ${state_update_frequency}
+
+# End-effector transformation matrix
+# Transform from robot base to world frame
+ee_trans_mat: ${eval:'[[1, 0, 0], [0, 1, 0], [0, 0, 1]]'}
+
+# Interpolation settings
+use_interpolator: true
+max_pos_speed: 0.2  # m/s
+max_rot_speed: 0.5  # rad/s
+
+# System settings
+warn_on_late: true
+synchronized: ${synchronized}
+
+# Workspace bounds for safety constraints
+# Set any bound to null to ignore that dimension
+workspace_bounds:
+  enabled: true
+  position:
+    x_min: -0.8  # meters
+    x_max: 0.8   # meters
+    y_min: -0.8  # meters
+    y_max: 0.8   # meters
+    z_min: 0.05  # meters (above table)
+    z_max: 1.2   # meters
+  orientation:
+    x_min: null
+    x_max: null
+    y_min: null
+    y_max: null
+    z_min: null
+    z_max: null
+
+# Gripper configuration
+gripper:
+  enabled: true
+  max_width: 0.08  # 80mm max gripper width
+  min_width: 0.0   # Fully closed
+  speed: 0.1       # Gripper speed (m/s)
+  force: 40.0      # Gripper force (N)
