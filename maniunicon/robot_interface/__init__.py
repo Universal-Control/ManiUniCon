@@ -10,10 +10,10 @@ except ImportError:
     )
 
 try:
-    from maniunicon.robot_interface import franka_panda
+    from maniunicon.robot_interface import franka_panda_deoxys
 except ImportError:
     print(
-        "Franka Panda robot interface not installed. Please install it with `pip install franka-py`"
+        "Franka Panda deoxys interface not installed. Please install deoxys_control"
     )
 
 
@@ -21,5 +21,5 @@ __all__ = [
     "dummy",
     "meshcat",
     "ur5_robotiq",
-    "franka_panda",
+    "franka_panda_deoxys",
 ]
