@@ -105,13 +105,8 @@ class FrankaPandaDeoxysInterface(RobotInterface):
             
         try:
             # Get config path
-            if os.path.exists(self.deoxys_config_path):
-                config_path = self.deoxys_config_path
-            else:
-                # Try relative to deoxys config root
-                config_path = os.path.join(config_root, self.deoxys_config_path)
-                if not os.path.exists(config_path):
-                    config_path = self.deoxys_config_path  # Use as-is and let deoxys handle
+            assert os.path.exists(self.deoxys_config_path), "deoxys config not exist!"
+            config_path = self.deoxys_config_path
             
             # Initialize Franka interface from deoxys
             self.robot_interface = FrankaInterface(

@@ -71,11 +71,3 @@ workspace_bounds:
     y_max: null
     z_min: null
     z_max: null
-
-# Gripper configuration
-# gripper:
-#   enabled: true
-#   max_width: 0.08  # 80mm max gripper width
-#   min_width: 0.0   # Fully closed
-#   speed: 0.1       # Gripper speed (m/s)
-#   force: 40.0      # Gripper force (N)

@@ -24,10 +24,10 @@ robot_interface:
     torque_limits: [87.0, 87.0, 87.0, 87.0, 12.0, 12.0, 12.0]
     
     # TCP frame
-    tcp_frame: panda_hand
+    tcp_frame: panda_joint8
     
     # Deoxys-specific configuration
-    deoxys_config: "charmander.yml"  # NOTE: WRITE THE PATH TO THE DEOXYS ROBOT CONFIG FILE HERE.
+    deoxys_config: "/home/ziang/02_Robot_Infra/Panda_Arm/deoxys_control/deoxys/config/squirtle.yml"  # NOTE: WRITE THE PATH TO THE DEOXYS ROBOT CONFIG FILE HERE.
     controller_type: "OSC_POSE"  # Default controller: OSC_POSE, OSC_POSITION, JOINT_POSITION
     controller_config: "osc-pose-controller.yml"  # Controller config file
     
@@ -82,11 +82,3 @@ workspace_bounds:
     y_max: null
     z_min: null
     z_max: null
-
-# Gripper configuration
-gripper:
-  enabled: true
-  max_width: 0.08  # 80mm max gripper width
-  min_width: 0.0   # Fully closed
-  speed: 0.1       # Gripper speed (m/s)
-  force: 40.0      # Gripper force (N)
