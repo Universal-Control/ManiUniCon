@@ -1,3 +1,4 @@
+from numba import njit
 import numpy as np
 import open3d as o3d
 import trimesh
@@ -26,6 +27,21 @@ except:
 
 BOUND = [0.2, 1.03, -1.2, 1.2, -0.3, 0.7]
 
+
+@njit
+def filter_vectors(v, rgb):
+    norms = np.sqrt((v**2).sum(axis=1))
+    valid = norms > 0
+    points = v[valid]
+    colors = rgb[valid]
+    return points, colors
+
+
+@njit
+def transform_points(points, transform, transform_T):
+    points = points @ transform_T
+    points += transform
+    return points
 
 def save_view_point(pcd, filename):
     vis = o3d.visualization.Visualizer()

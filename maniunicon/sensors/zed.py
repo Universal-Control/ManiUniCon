@@ -1,10 +1,10 @@
 import torch.multiprocessing as mp
 import time
 import traceback
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
 
 import numpy as np
-import pyrealsense2 as rs
+import pyzed.sl as sl
 from threadpoolctl import threadpool_limits
 import cv2
 from numba import njit
@@ -23,29 +23,20 @@ from maniunicon.utils.timestamp_accumulator import (
 from maniunicon.utils.pcd_utils import filter_vectors, transform_points
 
 
-def get_color_from_tex_coords(tex_coords, color_image):
-    us = (tex_coords[:, 0] * 640).astype(int)
-    vs = (tex_coords[:, 1] * 480).astype(int)
-
-    us = np.clip(us, 0, 639)
-    vs = np.clip(vs, 0, 479)
-
-    colors = color_image[vs, us]
-
-    return colors
-
-
-class SingleRealsenseCamera(mp.Process):
-    """Individual camera process for capturing RGB images from a single RealSense camera."""
+class SingleZedCamera(mp.Process):
+    """Individual camera process for capturing RGB and depth images from a single ZED camera."""
 
     def __init__(
         self,
         shared_storage: SharedStorage,
         camera_name: str,
-        serial_number: str,
-        resolution: Tuple[int, int] = (640, 480),
+        serial_number: Optional[int] = None,
+        resolution: str = "HD720",  # HD720, HD1080, HD2K, VGA
         fps: int = 30,
-        depth_hole_filling: bool = False,
+        depth_mode: str = "ULTRA",  # PERFORMANCE, QUALITY, ULTRA, NEURAL
+        coordinate_units: str = "METER",
+        minimum_distance: float = 0.2,
+        maximum_distance: float = 10.0,
         verbose: bool = False,
     ):
         super().__init__()
@@ -54,7 +45,10 @@ class SingleRealsenseCamera(mp.Process):
         self.serial_number = serial_number
         self.resolution = resolution
         self.fps = fps
-        self.depth_hole_filling = depth_hole_filling
+        self.depth_mode = depth_mode
+        self.coordinate_units = coordinate_units
+        self.minimum_distance = minimum_distance
+        self.maximum_distance = maximum_distance
         self.verbose = verbose
         self.put_start_time = None
 
@@ -90,6 +84,37 @@ class SingleRealsenseCamera(mp.Process):
     def end_wait(self):
         self.join()
 
+    def _get_resolution_enum(self):
+        """Convert resolution string to ZED enum."""
+        resolution_map = {
+            "HD2K": sl.RESOLUTION.HD2K,
+            "HD1080": sl.RESOLUTION.HD1080,
+            "HD720": sl.RESOLUTION.HD720,
+            "VGA": sl.RESOLUTION.VGA,
+        }
+        return resolution_map.get(self.resolution, sl.RESOLUTION.HD720)
+
+    def _get_depth_mode_enum(self):
+        """Convert depth mode string to ZED enum."""
+        depth_mode_map = {
+            "PERFORMANCE": sl.DEPTH_MODE.PERFORMANCE,
+            "QUALITY": sl.DEPTH_MODE.QUALITY,
+            "ULTRA": sl.DEPTH_MODE.ULTRA,
+            "NEURAL": sl.DEPTH_MODE.NEURAL,
+        }
+        return depth_mode_map.get(self.depth_mode, sl.DEPTH_MODE.ULTRA)
+
+    def _get_coordinate_units_enum(self):
+        """Convert coordinate units string to ZED enum."""
+        units_map = {
+            "MILLIMETER": sl.UNIT.MILLIMETER,
+            "CENTIMETER": sl.UNIT.CENTIMETER,
+            "METER": sl.UNIT.METER,
+            "INCH": sl.UNIT.INCH,
+            "FOOT": sl.UNIT.FOOT,
+        }
+        return units_map.get(self.coordinate_units, sl.UNIT.METER)
+
     def run(self):
         """Main camera capture loop."""
 
@@ -98,46 +123,51 @@ class SingleRealsenseCamera(mp.Process):
             threadpool_limits(1)
             cv2.setNumThreads(1)
 
-            # configure realsense
-            rs_config = rs.config()
+            # Create ZED camera object
+            zed = sl.Camera()
 
-            # enable streams
-            width, height = self.resolution
-            rs_config.enable_stream(
-                rs.stream.color, width, height, rs.format.bgr8, self.fps
-            )
-            rs_config.enable_stream(
-                rs.stream.depth, width, height, rs.format.z16, self.fps
-            )
+            # Set initialization parameters
+            init_params = sl.InitParameters()
+            init_params.camera_resolution = self._get_resolution_enum()
+            init_params.camera_fps = self.fps
+            init_params.depth_mode = self._get_depth_mode_enum()
+            init_params.coordinate_units = self._get_coordinate_units_enum()
+            init_params.depth_minimum_distance = self.minimum_distance
+            init_params.depth_maximum_distance = self.maximum_distance
+            
+            # Set serial number if provided
+            if self.serial_number is not None:
+                init_params.set_from_serial_number(self.serial_number)
+            
+            # Enable positional tracking if needed
+            init_params.coordinate_system = sl.COORDINATE_SYSTEM.RIGHT_HANDED_Y_UP
 
-            # create aligner
-            align_to = rs.stream.color
-            aligner = rs.align(align_to)
-
-            # optionally set depth hole filling
-            if self.depth_hole_filling:
-                hole_filling = rs.hole_filling_filter(mode=2)
-
-            # start pipeline
+            # Open the camera
             try:
-                rs_config.enable_device(self.serial_number)
+                err = zed.open(init_params)
+                if err != sl.ERROR_CODE.SUCCESS:
+                    print(f"Error opening ZED camera {self.camera_name}: {err}")
+                    self.shared_storage.error_state.value = True
+                    raise RuntimeError(f"Failed to open ZED camera: {err}")
 
-                # pipeline
-                pipeline = rs.pipeline()
-                pipeline_profile = pipeline.start(rs_config)
-                depth_scale = (
-                    pipeline_profile.get_device().first_depth_sensor().get_depth_scale()
-                )
-                intr = (
-                    pipeline_profile.get_stream(rs.stream.color)
-                    .as_video_stream_profile()
-                    .get_intrinsics()
-                )
-                intr = np.array([intr.fx, intr.fy, intr.ppx, intr.ppy])
-                # report global time
-                d = pipeline_profile.get_device().first_color_sensor()
-                d.set_option(rs.option.global_time_enabled, 1)
+                # Get camera calibration parameters
+                camera_info = zed.get_camera_information()
+                calibration_params = camera_info.camera_configuration.calibration_parameters
+                left_cam = calibration_params.left_cam
+                
+                # Extract intrinsics (fx, fy, cx, cy)
+                intr = np.array([left_cam.fx, left_cam.fy, left_cam.cx, left_cam.cy])
+                
+                # Set runtime parameters
+                runtime_params = sl.RuntimeParameters()
+                runtime_params.sensing_mode = sl.SENSING_MODE.STANDARD
+                runtime_params.confidence_threshold = 100
+                runtime_params.texture_confidence_threshold = 100
 
+                # Create Mat objects for retrieving data
+                image = sl.Mat()
+                depth = sl.Mat()
+                
                 # put frequency regulation
                 put_idx = None
                 put_start_time = self.put_start_time
@@ -147,87 +177,82 @@ class SingleRealsenseCamera(mp.Process):
                 iter_idx = 0
                 t_start = time.time()
 
-                # iterate through the first few frames to get the camera ready
+                # Warm up the camera
                 for _ in range(10):
-                    pipeline.wait_for_frames()
+                    if zed.grab(runtime_params) == sl.ERROR_CODE.SUCCESS:
+                        pass
 
                 if self.verbose:
-                    print(
-                        f"[SingleRealsenseCamera {self.camera_name}] Camera initialized"
-                    )
+                    print(f"[SingleZedCamera {self.camera_name}] Camera initialized")
 
             except Exception as e:
                 print(f"Error setting up camera {self.camera_name}: {e}")
                 self.shared_storage.error_state.value = True
                 raise e
 
-            # main loop
+            # Main loop
             try:
                 while (
                     not self.stop_event.is_set()
                     and self.shared_storage.is_running.value
                 ):
-                    # Wait for frames
-                    frameset = pipeline.wait_for_frames()
-                    frameset = aligner.process(frameset)
-                    receive_time = time.time()
-
-                    # Get color frame
-                    color_frame = frameset.get_color_frame()
-                    # Convert from BGR to RGB
-                    color = np.asarray(color_frame.get_data())[..., ::-1]
-
-                    # realsense report in ms
-                    capture_time = color_frame.get_timestamp() / 1000.0
-
-                    depth_frame = frameset.get_depth_frame()
-                    if self.depth_hole_filling:
-                        # Apply hole filling filter
-                        depth_frame = hole_filling.process(depth_frame)
-
-                    # working with frequency restriction first
-                    depth = np.array(depth_frame.get_data()) * depth_scale
-
-                    local_idxs, global_idxs, put_idx = get_accumulate_timestamp_idxs(
-                        timestamps=[receive_time],
-                        start_time=put_start_time,
-                        dt=1.0 / self.fps,
-                        next_global_idx=put_idx,
-                        allow_negative=True,
-                    )
-
-                    for step_idx in global_idxs:
-                        data = SingleCameraData(
-                            color=color,
-                            depth=depth,
-                            intr=intr,
-                            camera_receive_timestamp=receive_time,
-                            camera_capture_timestamp=capture_time,
-                            step_idx=step_idx,
-                            timestamp=receive_time,
+                    # Grab an image
+                    if zed.grab(runtime_params) == sl.ERROR_CODE.SUCCESS:
+                        receive_time = time.time()
+                        
+                        # Retrieve left image (RGB)
+                        zed.retrieve_image(image, sl.VIEW.LEFT)
+                        # Convert from BGRA to RGB
+                        color_bgra = image.get_data()
+                        color = color_bgra[:, :, :3][:, :, ::-1]  # BGRA to RGB
+                        
+                        # Retrieve depth map
+                        zed.retrieve_measure(depth, sl.MEASURE.DEPTH)
+                        depth_data = depth.get_data()
+                        
+                        # Get timestamp from camera
+                        timestamp = zed.get_timestamp(sl.TIME_REFERENCE.IMAGE)
+                        # Convert from nanoseconds to seconds
+                        capture_time = timestamp.get_nanoseconds() / 1e9
+                        
+                        local_idxs, global_idxs, put_idx = get_accumulate_timestamp_idxs(
+                            timestamps=[receive_time],
+                            start_time=put_start_time,
+                            dt=1.0 / self.fps,
+                            next_global_idx=put_idx,
+                            allow_negative=True,
                         )
-                        self.shared_storage.write_single_camera(self.camera_name, data)
 
-                    # signal ready
-                    if iter_idx == 0:
-                        self.ready_event.set()
+                        for step_idx in global_idxs:
+                            data = SingleCameraData(
+                                color=color,
+                                depth=depth_data,
+                                intr=intr,
+                                camera_receive_timestamp=receive_time,
+                                camera_capture_timestamp=capture_time,
+                                step_idx=step_idx,
+                                timestamp=receive_time,
+                            )
+                            self.shared_storage.write_single_camera(self.camera_name, data)
 
-                    t_end = time.time()
-                    duration = t_end - t_start
-                    frequency = np.round(1 / duration, 1)
-                    t_start = t_end
+                        # Signal ready
+                        if iter_idx == 0:
+                            self.ready_event.set()
 
-                    iter_idx += 1
-                    # performance logging
-                    if self.verbose and iter_idx % 30 == 0:  # Log every 30 frames
-                        print(
-                            f"[SingleRealsenseCamera {self.camera_name}] FPS: {frequency:.1f}"
-                        )
+                        t_end = time.time()
+                        duration = t_end - t_start
+                        frequency = np.round(1 / duration, 1)
+                        t_start = t_end
+
+                        iter_idx += 1
+                        # Performance logging
+                        if self.verbose and iter_idx % 30 == 0:  # Log every 30 frames
+                            print(
+                                f"[SingleZedCamera {self.camera_name}] FPS: {frequency:.1f}"
+                            )
 
             except Exception as e:
                 print(f"Error in camera {self.camera_name} capture loop: {e}")
-                import traceback
-
                 traceback.print_exc()
                 self.shared_storage.error_state.value = True
 
@@ -235,14 +260,16 @@ class SingleRealsenseCamera(mp.Process):
             print(f"Fatal error in camera {self.camera_name}: {e}")
             self.shared_storage.error_state.value = True
         finally:
-            rs_config.disable_all_streams()
+            # Close the camera
+            if 'zed' in locals():
+                zed.close()
             self.ready_event.set()  # Ensure ready event is set even on error
             if self.verbose:
-                print(f"[SingleRealsenseCamera {self.camera_name}] Process exiting")
+                print(f"[SingleZedCamera {self.camera_name}] Process exiting")
 
 
-class RealSenseSensor(BaseSensor):
-    """Process that manages multiple RealSense camera processes and produces stacked images and fused point clouds."""
+class ZedSensor(BaseSensor):
+    """Process that manages multiple ZED camera processes and produces stacked images and fused point clouds."""
 
     def __init__(
         self,
@@ -253,24 +280,29 @@ class RealSenseSensor(BaseSensor):
         warn_on_late: bool = True,
     ):
         """
-        Initialize the RealSense sensor.
+        Initialize the ZED sensor.
 
         Args:
-            shared_memory: Shared memory manager instance
+            shared_storage: Shared memory manager instance
             camera_config: Dictionary mapping camera names to their configurations
                 Each config should have:
-                - serial_number: str - The RealSense camera's serial number
-                - resolution: Tuple[int, int] - (width, height) of the RGB stream
+                - serial_number: Optional[int] - The ZED camera's serial number (None for auto-detect)
+                - resolution: str - Resolution setting (HD720, HD1080, HD2K, VGA)
                 - fps: int - Frames per second to capture
+                - depth_mode: str - Depth mode (PERFORMANCE, QUALITY, ULTRA, NEURAL)
+                - coordinate_units: str - Units for coordinates (METER, MILLIMETER, etc.)
+                - minimum_distance: float - Minimum depth distance
+                - maximum_distance: float - Maximum depth distance
             frequency: Frequency to update the robot state in shared memory (in Hz)
             verbose: Whether to print debug information
+            warn_on_late: Whether to warn when the update loop is running late
         """
 
         super().__init__(shared_storage, frequency)
         self.camera_config = camera_config
         self.verbose = verbose
         self.warn_on_late = warn_on_late
-        self.camera_processes: Dict[str, SingleRealsenseCamera] = {}
+        self.camera_processes: Dict[str, SingleZedCamera] = {}
         self.stop_event = mp.Event()
         self.record_buffer = None
 
@@ -283,7 +315,7 @@ class RealSenseSensor(BaseSensor):
         for cam_name, serial_number in self.camera_config["camera_names"].items():
             if self.camera_config[cam_name].get("display", False):
                 self.display_cameras[cam_name] = True
-                self.camera_windows[cam_name] = f"RealSense Camera {cam_name}"
+                self.camera_windows[cam_name] = f"ZED Camera {cam_name}"
 
                 # Load overlay image for this specific camera
                 overlay_path = self.camera_config[cam_name].get("overlay_image", "none")
@@ -291,11 +323,16 @@ class RealSenseSensor(BaseSensor):
                     try:
                         overlay_img = cv2.imread(overlay_path)
                         if overlay_img is not None:
-                            # Resize to camera resolution
-                            resolution = self.camera_config[cam_name]["resolution"]
-                            overlay_img = cv2.resize(
-                                overlay_img, (resolution[0], resolution[1])
-                            )
+                            # Get resolution dimensions
+                            resolution_str = self.camera_config[cam_name].get("resolution", "HD720")
+                            resolution_map = {
+                                "HD2K": (2208, 1242),
+                                "HD1080": (1920, 1080),
+                                "HD720": (1280, 720),
+                                "VGA": (672, 376),
+                            }
+                            width, height = resolution_map.get(resolution_str, (1280, 720))
+                            overlay_img = cv2.resize(overlay_img, (width, height))
                             self.camera_overlays[cam_name] = overlay_img
                             if self.verbose:
                                 print(
@@ -323,12 +360,16 @@ class RealSenseSensor(BaseSensor):
 
         for cam_name, serial_number in self.camera_config["camera_names"].items():
             # Create camera process
-            camera_process = SingleRealsenseCamera(
+            camera_process = SingleZedCamera(
                 shared_storage=self.shared_storage,
                 camera_name=cam_name,
-                serial_number=serial_number,
-                resolution=self.camera_config[cam_name]["resolution"],
-                fps=self.camera_config[cam_name]["fps"],
+                serial_number=serial_number if serial_number != "auto" else None,
+                resolution=self.camera_config[cam_name].get("resolution", "HD720"),
+                fps=self.camera_config[cam_name].get("fps", 30),
+                depth_mode=self.camera_config[cam_name].get("depth_mode", "ULTRA"),
+                coordinate_units=self.camera_config[cam_name].get("coordinate_units", "METER"),
+                minimum_distance=self.camera_config[cam_name].get("minimum_distance", 0.2),
+                maximum_distance=self.camera_config[cam_name].get("maximum_distance", 10.0),
                 verbose=self.verbose,
             )
 
@@ -388,7 +429,7 @@ class RealSenseSensor(BaseSensor):
             rate = RateLimiter(
                 frequency=self.frequency,
                 warn=self.warn_on_late,
-                name="realsense_sensor",
+                name="zed_sensor",
             )
             while self.shared_storage.is_running.value and not self.stop_event.is_set():
                 try:
@@ -397,7 +438,7 @@ class RealSenseSensor(BaseSensor):
                         data = self.shared_storage.read_single_camera(camera_name)
                         if data is None:
                             print(
-                                "[RealSenseSensor] No data received from camera:",
+                                "[ZedSensor] No data received from camera:",
                                 camera_name,
                             )
                             rate.sleep()
@@ -430,7 +471,7 @@ class RealSenseSensor(BaseSensor):
 
                 except Exception as e:
                     traceback.print_exc()
-                    print(f"Error in RealSense sensor update loop: {e}")
+                    print(f"Error in ZED sensor update loop: {e}")
                     self.shared_storage.error_state.value = True
                     break
 
@@ -445,13 +486,13 @@ class RealSenseSensor(BaseSensor):
             print("Record directory not set, skipping data dump")
             return
 
-        self.record_buffer.dump(name="realsense", dir=record_dir)
+        self.record_buffer.dump(name="zed", dir=record_dir)
 
     def stop(self):
         """Stop the sensor and all camera processes."""
 
         if self.verbose:
-            print("Stopping RealSense sensor...")
+            print("Stopping ZED sensor...")
         self.stop_event.set()
         self._cleanup_camera_processes()
         for window_name in self.camera_windows.values():

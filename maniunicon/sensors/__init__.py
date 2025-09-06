@@ -6,6 +6,7 @@ import warnings
 _SENSORS = {
     "ReplaySensor": "replay",
     "RealSenseSensor": "realsense",
+    "ZedSensor": "zed",
 }
 
 __all__ = []
