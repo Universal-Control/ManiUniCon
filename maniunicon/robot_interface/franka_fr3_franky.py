@@ -8,7 +8,14 @@ import traceback
 from typing import Any, Dict
 
 import numpy as np
-from franky import Affine, Robot, Gripper, JointMotion, JointVelocityMotion, RelativeDynamicsFactor
+from franky import (
+    Affine,
+    Robot,
+    Gripper,
+    JointMotion,
+    JointVelocityMotion,
+    RelativeDynamicsFactor,
+)
 
 from maniunicon.robot_interface.base import RobotInterface
 from maniunicon.utils.ik_solver import IKSolver
@@ -34,9 +41,8 @@ class FRANKAInterface(RobotInterface):
         self.gripper_control_speed = config.get("gripper_control_speed", 0.1)
         self.gripper_control_force = config.get("gripper_control_force", 20)
 
-
         # Robot connections
-        self.robot = None   
+        self.robot = None
         self.ik_solver = None
         self._current_state = None
         self._is_connected = False
@@ -50,8 +56,8 @@ class FRANKAInterface(RobotInterface):
             self.robot = Robot(self.ip)
             self.robot.recover_from_errors()
             self.robot.relative_dynamics_factor = RelativeDynamicsFactor(
-                    velocity=0.3, acceleration=0.3, jerk=0.05
-                )
+                velocity=0.3, acceleration=0.3, jerk=0.05
+            )
 
             try:
                 self.gripper = Gripper(self.ip)
@@ -168,7 +174,9 @@ class FRANKAInterface(RobotInterface):
         if self._last_time_get_action is None:
             self._last_time_get_action = time.time()
         else:
-            print(f"Time since last get action: {(time.time() - self._last_time_get_action) * 1000} ms")
+            print(
+                f"Time since last get action: {(time.time() - self._last_time_get_action) * 1000} ms"
+            )
             self._last_time_get_action = time.time()
 
         if not self.is_connected():
@@ -182,7 +190,9 @@ class FRANKAInterface(RobotInterface):
             if action.control_mode == "joint":
                 # Direct joint control
                 if action.joint_positions is not None:
-                    action.joint_positions = self._clip_joint_positions(action.joint_positions)
+                    action.joint_positions = self._clip_joint_positions(
+                        action.joint_positions
+                    )
                     motion = JointMotion(action.joint_positions)
                     self.robot.move(motion, asynchronous=True)
                 elif action.joint_velocities is not None:
@@ -199,7 +209,12 @@ class FRANKAInterface(RobotInterface):
                     if not self.gripper_state.item():  # current is open
                         print("Closing gripper")
                         self.gripper_state = action.gripper_state
-                        self.gripper.grasp(0.0, self.gripper_control_speed, self.gripper_control_force, epsilon_outer=1.0)
+                        self.gripper.grasp(
+                            0.0,
+                            self.gripper_control_speed,
+                            self.gripper_control_force,
+                            epsilon_outer=1.0,
+                        )
                 else:  # action is open
                     if self.gripper_state:  # current is close
                         print("Opening gripper")
@@ -321,17 +336,29 @@ class FRANKAInterface(RobotInterface):
             self._error_state = True
             return None
 
-    def _clip_joint_positions(self, joint_positions: np.ndarray, max_threshold: float = 0.6, min_threshold: float = 0.01) -> np.ndarray:
+    def _clip_joint_positions(
+        self,
+        joint_positions: np.ndarray,
+        max_threshold: float = 0.6,
+        min_threshold: float = 0.01,
+    ) -> np.ndarray:
         """Clip joint positions, ensure each step is within the limits."""
 
         state = self.get_state()
         current_joint_positions = state.joint_positions
         delta_joint_positions = joint_positions - current_joint_positions
         if np.max(np.abs(delta_joint_positions)) > max_threshold:
-            print(f"FRANKAInterface: delta_joint_positions {delta_joint_positions} exceeds threshold {max_threshold}, clipped, max {np.max(np.abs(delta_joint_positions))}")
-        delta_joint_positions = np.clip(delta_joint_positions, -max_threshold, max_threshold)
-        delta_joint_positions = np.where(np.abs(delta_joint_positions) < min_threshold, 0, delta_joint_positions)
+            print(
+                f"FRANKAInterface: delta_joint_positions {delta_joint_positions} exceeds threshold {max_threshold}, clipped, max {np.max(np.abs(delta_joint_positions))}"
+            )
+        delta_joint_positions = np.clip(
+            delta_joint_positions, -max_threshold, max_threshold
+        )
+        delta_joint_positions = np.where(
+            np.abs(delta_joint_positions) < min_threshold, 0, delta_joint_positions
+        )
         return current_joint_positions + delta_joint_positions
+
 
 if __name__ == "__main__":
     joint = [0.0, 0.0, 0.0, -2.2, 0.0, 2.2, 0.7]
