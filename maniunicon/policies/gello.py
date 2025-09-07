@@ -31,7 +31,7 @@ class GelloPolicy(BasePolicy):
         self,
         shared_storage: SharedStorage,
         reset_event: Event,
-        num_joints: int = 7,  # Gello默认7个关节
+        num_joints: int = 7,  # Gello defaults to 7 joints
         command_latency: float = 0.01,  # seconds
         device_path: str = "/dev/ttyUSB0",
         dt: float = 0.01,  # Time step between actions
@@ -48,7 +48,7 @@ class GelloPolicy(BasePolicy):
             command_latency=command_latency,
             name=name,
         )
-        self.num_joints = num_joints  # 保存配置的关节数
+        self.num_joints = num_joints  # Save the configured number of joints
         self.device_path = device_path
         self.dt = dt
         self.frequency = 1 / dt
@@ -80,36 +80,6 @@ class GelloPolicy(BasePolicy):
         clipped_positions = target_positions.copy()
         return clipped_positions  # temp disable
 
-        # Apply joint limits if specified
-        if self.joint_limits is not None:
-            if "min" in self.joint_limits:
-                min_limits = np.array(self.joint_limits["min"])
-                clipped_positions = np.maximum(clipped_positions, min_limits)
-            if "max" in self.joint_limits:
-                max_limits = np.array(self.joint_limits["max"])
-                clipped_positions = np.minimum(clipped_positions, max_limits)
-
-        # Apply velocity limiting for safety
-        if current_positions is not None and self.joint_velocity_limit > 0:
-            # Calculate maximum allowed change based on velocity limit and dt
-            max_delta = self.joint_velocity_limit * self.dt
-
-            # Compute difference from current position
-            delta = clipped_positions - current_positions
-
-            if np.max(np.abs(delta)) > max_delta:
-                print(
-                    f"GelloPolicy: delta {delta} exceeds max_delta {max_delta}, clipped"
-                )
-
-            # Clip the delta to maximum allowed change
-            delta_clipped = np.clip(delta, -max_delta, max_delta)
-
-            # Apply clipped delta to current position
-            clipped_positions = current_positions + delta_clipped
-
-        return clipped_positions
-
     def sync_state(self):
         """Sync the robot state with shared storage."""
         state = None
@@ -130,7 +100,7 @@ class GelloPolicy(BasePolicy):
             self.sync_state()
 
             # Initialize Gello with current robot joint positions
-            # Gello支持的关节数由num_joints配置决定
+            # Number of joints supported by Gello is determined by num_joints configuration
             self.agent = GelloAgent(
                 port=self.device_path,
             )
@@ -166,19 +136,19 @@ class GelloPolicy(BasePolicy):
                     self.shared_storage.robot_ready.clear()
 
                 # Read joint positions from Gello
-                # agent.act() 返回的是一个包含关节位置和gripper状态的数组
-                # 格式: [joint1, joint2, ..., jointN, gripper1, gripper2]
+                # agent.act() returns an array containing joint positions and gripper state
+                # Format: [joint1, joint2, ..., jointN, gripper1, gripper2]
                 gello_output = self.agent.act({})
 
                 # Extract joint positions and gripper state
-                # Gello返回num_joints个关节位置 + 2个gripper值
+                # Gello returns num_joints joint positions + 2 gripper values
                 if self._current_joint_positions is not None:
                     num_robot_joints = len(self._current_joint_positions)
 
                     # Create target joint positions array
                     target_joint_positions = np.zeros(num_robot_joints)
 
-                    # Copy Gello joints (取前num_joints个值作为关节位置)
+                    # Copy Gello joints 
                     num_gello_joints = min(self.num_joints, num_robot_joints)
                     target_joint_positions[:num_gello_joints] = gello_output[
                         :num_gello_joints

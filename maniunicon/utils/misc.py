@@ -132,13 +132,13 @@ def temporal_depth_proc_batch(cur, prev, sigma_depth=0.02, sigma_rgb=0.01, eps=1
 
     _sigma_depth = base_sigma_depth * ratio_rgb  # (B, H, W)
 
-    # 深度差
+    # |Δdepth|  (B, H, W)
     diff_depth = np.abs(cur_depth - prev_depth)  # (B, H, W)
 
-    # 根据深度误差和动态 σ 计算融合权重
+    # compute mask ratio for current depth
     mask_ratio = diff_depth / (diff_depth + _sigma_depth + eps)  # (B, H, W)
 
-    # 融合：更可信的像素来自当前帧
+    # merge depths
     refined_depth = cur_depth * mask_ratio + prev_depth * (1.0 - mask_ratio)
 
     return refined_depth.reshape(-1, 1, *refined_depth.shape[1:])  # (B, 1, H, W)
