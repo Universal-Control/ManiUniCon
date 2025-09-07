@@ -1,13 +1,11 @@
 """Gello-based teleoperation policy for robot control."""
 
-import os
 import time
 from typing import Optional
 import numpy as np
 from multiprocessing.synchronize import Event
 import traceback
 from loop_rate_limiters import RateLimiter
-from scipy.spatial.transform import Rotation
 
 from gello.agents.gello_agent import GelloAgent
 
@@ -17,7 +15,6 @@ from maniunicon.utils.shared_memory.shared_storage import (
     RobotState,
 )
 from maniunicon.core.policy import BasePolicy
-from maniunicon.utils.data import get_next_episode_dir
 
 
 class GelloPolicy(BasePolicy):
@@ -148,7 +145,7 @@ class GelloPolicy(BasePolicy):
                     # Create target joint positions array
                     target_joint_positions = np.zeros(num_robot_joints)
 
-                    # Copy Gello joints 
+                    # Copy Gello joints
                     num_gello_joints = min(self.num_joints, num_robot_joints)
                     target_joint_positions[:num_gello_joints] = gello_output[
                         :num_gello_joints

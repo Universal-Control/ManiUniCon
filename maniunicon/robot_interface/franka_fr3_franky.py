@@ -9,7 +9,6 @@ from typing import Any, Dict
 
 import numpy as np
 from franky import (
-    Affine,
     Robot,
     Gripper,
     JointMotion,
@@ -247,7 +246,8 @@ class FRANKAInterface(RobotInterface):
             # You can add specific UR5 error checking here
             # For example, check robot mode, safety status, etc.
             return self._error_state
-        except:
+        except Exception:
+            print("Error checking robot error state")
             return True
 
     def clear_error(self) -> bool:
