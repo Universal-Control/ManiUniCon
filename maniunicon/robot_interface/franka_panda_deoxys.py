@@ -125,9 +125,11 @@ class FrankaPandaDeoxysInterface(RobotInterface):
             
             if os.path.exists(controller_cfg_path):
                 self.controller_cfg = YamlConfig(controller_cfg_path).as_easydict()
+                print("Loaded controller cfg: {}".format(controller_cfg_path))
             else:
                 # Use default controller config
                 self.controller_cfg = get_default_controller_config(self.default_controller_type)
+                print("Loaded default controller cfg".format(controller_cfg_path))
             
             # Override action scales if specified
             if hasattr(self.controller_cfg, 'action_scale'):
@@ -192,11 +194,12 @@ class FrankaPandaDeoxysInterface(RobotInterface):
                 joint_controller_cfg = get_default_controller_config(controller_type)
                 
                 # Add gripper action (open)
-                action = self.init_qpos + [-1.0]  # -1.0 for open gripper
+                action = np.array(self.init_qpos + [-1.0])  # -1.0 for open gripper
                 
                 # Move to initial position
                 max_iterations = 200
                 for _ in range(max_iterations):
+                    print(_)
                     # Check if we've reached the target
                     if len(self.robot_interface._state_buffer) > 0:
                         current_q = np.array(self.robot_interface._state_buffer[-1].q)
@@ -359,8 +362,8 @@ class FrankaPandaDeoxysInterface(RobotInterface):
                     
                     # Use OSC_POSE controller
                     controller_type = "OSC_POSE"
-                    controller_cfg = self.controller_cfg.copy() if self.controller_cfg else get_default_controller_config(controller_type)
-                    
+                    controller_cfg = self.controller_cfg if self.controller_cfg else get_default_controller_config(controller_type)
+
                     # Get current pose
                     current_state = self.get_state()
                     
@@ -372,19 +375,21 @@ class FrankaPandaDeoxysInterface(RobotInterface):
                     current_rot = Rotation.from_quat(current_state.tcp_orientation)
                     target_rot = Rotation.from_quat(action.tcp_orientation)
                     rot_delta = target_rot * current_rot.inv()
-                    axis_angle = rot_delta.as_rotvec()
+                    axis_angle = rot_delta.as_euler('XYZ')
                     
-                    # Create action [dx, dy, dz, dax, day, daz, gripper]
+                    # Create action [dx, dy, dz, R, P, Y, gripper]
                     gripper_action = 1.0 if self._gripper_state.item() else -1.0
                     deoxys_action = np.concatenate([
                         pos_delta,
                         axis_angle,
                         [gripper_action]
                     ])
+                    deoxys_action = np.clip(deoxys_action, -1, 1)
                     
                     # Set as delta action
                     controller_cfg.is_delta = True
             
+            print(deoxys_action[:3])
             # Send control command
             self.robot_interface.control(
                 controller_type=controller_type,

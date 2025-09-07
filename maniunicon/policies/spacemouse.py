@@ -134,8 +134,8 @@ class SpaceMouseDevice:
 # Device specifications
 DEVICE_SPECS = {
     "SpaceMouse Compact": DeviceSpec(
-        vendor_id=0x256F,
-        product_id=0xC635,
+        vendor_id=9583,#, 0x256F,
+        product_id=50734,# 0xC635,
         axis_mapping={
             "x": AxisSpec(channel=1, byte1=3, byte2=4, scale=-1),
             "y": AxisSpec(channel=1, byte1=1, byte2=2, scale=-1),
@@ -286,7 +286,7 @@ class SpaceMousePolicy(BasePolicy):
         state = None
         while state is None:
             state: RobotState | None = self.shared_storage.read_state(k=1)
-            print("KeyboardPolicy: waiting for state...")
+            print("SpaceMouse: waiting for state...")
             time.sleep(0.05)
 
         self._current_tcp_position = state.tcp_position[0].copy()

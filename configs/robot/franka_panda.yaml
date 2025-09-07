@@ -9,7 +9,7 @@ robot_interface:
     num_joints: 7
     
     # Initial joint configuration (neutral pose)
-    init_qpos: [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]
+    init_qpos: [0.09162, -0.19826, -0.0199, -2.4732, -0.01307, 2.304, 0.848]
     init_qvel: 1.0  # Velocity for moving to initial position
     
     # Joint limits for Franka Panda (in radians)
@@ -39,7 +39,7 @@ robot_interface:
     # Action scaling for OSC control
     action_scale:
       translation: 0.05  # Scale for position commands (m)
-      rotation: 0.05  # Scale for rotation commands (rad)
+      rotation: 1.0  # Scale for rotation commands (rad)
     
     # Control timestep
     dt: ${eval:'1 / ${control_frequency}'}
@@ -56,7 +56,7 @@ state_update_frequency: ${state_update_frequency}
 ee_trans_mat: ${eval:'[[1, 0, 0], [0, 1, 0], [0, 0, 1]]'}
 
 # Interpolation settings
-use_interpolator: true
+use_interpolator: false # deoxys already impletmented so we do not need it
 max_pos_speed: 0.2  # m/s
 max_rot_speed: 0.5  # rad/s
 
