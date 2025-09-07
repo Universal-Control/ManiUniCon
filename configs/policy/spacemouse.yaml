@@ -10,6 +10,54 @@ synchronized: ${synchronized}
 record_dir: null  # Directory to save recordings (set to path to enable recording)
 workspace_bounds: ${robot.workspace_bounds}
 
+# Device specifications
+device_specs:
+  SpaceMouse Compact:
+    vendor_id: 9583  # 0x256F
+    product_id: 50734  # 0xC635
+    axis_mapping:
+      x:
+        channel: 1
+        byte1: 3
+        byte2: 4
+        scale: -1
+      y:
+        channel: 1
+        byte1: 1
+        byte2: 2
+        scale: -1
+      z:
+        channel: 1
+        byte1: 5
+        byte2: 6
+        scale: -1
+      roll:
+        channel: 2
+        byte1: 1
+        byte2: 2
+        scale: 1
+      pitch:
+        channel: 2
+        byte1: 3
+        byte2: 4
+        scale: -1
+      yaw:
+        channel: 2
+        byte1: 5
+        byte2: 6
+        scale: 1
+    button_mapping:
+      left:
+        channel: 3
+        byte: 1
+        bit: 0
+      right:
+        channel: 3
+        byte: 1
+        bit: 1
+    axis_scale: 350.0
+    max_bytes: 7
+
 # These parameters are automatically passed by the main system
 shared_storage: none  # to be replaced
 reset_event: none  # to be replaced 

@@ -131,34 +131,43 @@ class SpaceMouseDevice:
         return ret
 
 
-# Device specifications
-DEVICE_SPECS = {
-    "SpaceMouse Compact": DeviceSpec(
-        vendor_id=9583,#, 0x256F,
-        product_id=50734,# 0xC635,
-        axis_mapping={
-            "x": AxisSpec(channel=1, byte1=3, byte2=4, scale=-1),
-            "y": AxisSpec(channel=1, byte1=1, byte2=2, scale=-1),
-            "z": AxisSpec(channel=1, byte1=5, byte2=6, scale=-1),
-            "roll": AxisSpec(channel=2, byte1=1, byte2=2, scale=1),
-            "pitch": AxisSpec(channel=2, byte1=3, byte2=4, scale=-1),
-            "yaw": AxisSpec(channel=2, byte1=5, byte2=6, scale=1),
-        },
-        button_mapping={
-            "left": ButtonSpec(channel=3, byte=1, bit=0),
-            "right": ButtonSpec(channel=3, byte=1, bit=1),
-        },
-        axis_scale=350.0,
-        max_bytes=7,
-    )
-}
+def parse_device_specs(specs_dict):
+    """Parse device specifications from config dictionary."""
+    device_specs = {}
+    for name, spec in specs_dict.items():
+        axis_mapping = {}
+        for axis_name, axis_data in spec['axis_mapping'].items():
+            axis_mapping[axis_name] = AxisSpec(
+                channel=axis_data['channel'],
+                byte1=axis_data['byte1'],
+                byte2=axis_data['byte2'],
+                scale=axis_data['scale']
+            )
+        
+        button_mapping = {}
+        for button_name, button_data in spec['button_mapping'].items():
+            button_mapping[button_name] = ButtonSpec(
+                channel=button_data['channel'],
+                byte=button_data['byte'],
+                bit=button_data['bit']
+            )
+        
+        device_specs[name] = DeviceSpec(
+            vendor_id=spec['vendor_id'],
+            product_id=spec['product_id'],
+            axis_mapping=axis_mapping,
+            button_mapping=button_mapping,
+            axis_scale=spec['axis_scale'],
+            max_bytes=spec['max_bytes']
+        )
+    return device_specs
 
 
-def get_available_devices():
+def get_available_devices(device_specs):
     """Find available SpaceMouse devices."""
     available_devices = []
     for info in hid.enumerate():
-        for spec in DEVICE_SPECS.values():
+        for spec in device_specs.values():
             if (
                 info["vendor_id"] == spec.vendor_id
                 and info["product_id"] == spec.product_id
@@ -172,12 +181,15 @@ def get_available_devices():
 class SpaceMouseThread:
     """A daemon thread to listen to SpaceMouse."""
 
-    def __init__(self, device_spec: DeviceSpec | None = None):
+    def __init__(self, device_spec: DeviceSpec | None = None, device_specs_dict: dict | None = None):
         if device_spec is None:
-            device_specs = get_available_devices()
-            if len(device_specs) == 0:
+            if device_specs_dict is None:
+                raise RuntimeError("Either device_spec or device_specs_dict must be provided")
+            device_specs = parse_device_specs(device_specs_dict)
+            available = get_available_devices(device_specs)
+            if len(available) == 0:
                 raise RuntimeError("SpaceMouse not found")
-            device_spec = device_specs[0]
+            device_spec = available[0]
 
         self.device = SpaceMouseDevice()
         self.device.open(device_spec)
@@ -248,6 +260,7 @@ class SpaceMousePolicy(BasePolicy):
         synchronized: bool = False,
         warn_on_late: bool = True,
         workspace_bounds: dict = None,
+        device_specs: dict = None,  # Device specifications from config
         name: str = "SpaceMousePolicy",
     ):
         super().__init__(
@@ -265,6 +278,7 @@ class SpaceMousePolicy(BasePolicy):
         self.synchronized = synchronized
         self.warn_on_late = warn_on_late
         self.workspace_bounds = workspace_bounds
+        self.device_specs = device_specs
 
         # Internal state
         self._spacemouse_thread: Optional[SpaceMouseThread] = None
@@ -399,7 +413,7 @@ class SpaceMousePolicy(BasePolicy):
         try:
             # Connect to SpaceMouse
             try:
-                self._spacemouse_thread = SpaceMouseThread()
+                self._spacemouse_thread = SpaceMouseThread(device_specs_dict=self.device_specs)
                 print("SpaceMouse connected successfully")
                 print("\nSpaceMouse controls:")
                 print("Translation: Move end-effector in 3D space (X, Y, Z axes)")
