@@ -87,10 +87,17 @@ For **XArm6** robot:
 pip install -e '.[xarm]'
 ```
 
+For **FRANKA** robot with [franky-control](https://github.com/TimSchneider42/franky) library:
+```bash
+pip install -e '.[franky_fr3_franky]'
+```
+
 For **RealSense** cameras:
 ```bash
 pip install -e '.[realsense]'
 ```
+
+For **Gello** device, you need to setup the [Gello](https://github.com/wuphilipp/gello_software) following the instructions in the repository.
 
 ## 🎮 Usage
 
