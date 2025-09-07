@@ -1,7 +1,7 @@
 _target_: maniunicon.core.robot.Robot
 name: "franka"
 robot_interface:
-  _target_: maniunicon.robot_interface.franka.FRANKAInterface
+  _target_: maniunicon.robot_interface.franka_fr3_franky.FRANKAInterface
   config:
     urdf_path: "assets/franka_urdf/panda.urdf"
     urdf_package_dirs: ["assets/franka_urdf"]
