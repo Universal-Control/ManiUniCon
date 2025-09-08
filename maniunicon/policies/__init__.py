@@ -8,6 +8,7 @@ _POLICIES = {
     "SpaceMousePolicy": "spacemouse", 
     "KeyboardPolicy": "keyboard",
     "QuestPolicy": "quest",
+    "GelloPolicy":"gello",
 }
 
 __all__ = []

@@ -49,6 +49,9 @@ setup(
             "opencv-python",
             "numba",
         ],  # Optional dependency for RealSense cameras
+        "franky_fr3_franky": [
+            "franky-control==1.1.1",
+        ],
     },
     python_requires=">=3.10",
     classifiers=[

@@ -47,7 +47,7 @@ def save_view_point(pcd, filename):
     vis = o3d.visualization.Visualizer()
     vis.create_window()
     vis.add_geometry(pcd)
-    vis.run()  # 手动调整视角，按q退出
+    vis.run()  # adjust view point manually, press 'q' to terminate
     param = vis.get_view_control().convert_to_pinhole_camera_parameters()
     o3d.io.write_pinhole_camera_parameters(filename, param)
     vis.destroy_window()
@@ -61,16 +61,16 @@ def visualize_and_capture(
     if isinstance(color, torch.Tensor):
         color = color.detach().cpu().numpy()
 
-    # 创建点云对象并设置数据
+    # create point cloud
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(pos)
 
-    # 颜色归一化处理（假设输入颜色范围0-255）
+    # normalize color to [0, 1], assuming input color range is 0-255
     if np.max(color) > 1.5:
         color = color.astype(np.float32) / 255.0
     pcd.colors = o3d.utility.Vector3dVector(color)
 
-    # 创建可视化器
+    # create visualizer
     vis = o3d.visualization.Visualizer()
     vis.create_window(width=1920, height=1080)
 
@@ -78,28 +78,28 @@ def visualize_and_capture(
         size=0.1, origin=[0, 0, 0]
     )
 
-    # 添加几何体
+    # add geometry
     vis.add_geometry(pcd)
     vis.add_geometry(frame_base)
 
-    # 设置视角参数
+    # set view parameters
     params = o3d.io.read_pinhole_camera_parameters(camera_params_path)
     view_ctl = vis.get_view_control()
     view_ctl.convert_from_pinhole_camera_parameters(params)
 
-    # 更新渲染
+    # update rendering  and capture image
     vis.update_geometry(pcd)
     vis.update_geometry(frame_base)
     vis.poll_events()
     vis.update_renderer()
 
-    # 捕获并保存图像（添加延迟确保渲染完成）
+    # capture and save image (add delay to ensure rendering is complete)
     vis.capture_screen_image(output_image_path, do_render=True)
 
     if visualize:
         vis.run()
 
-    # 关闭窗口
+    # close window
     vis.destroy_window()
 
 
@@ -943,31 +943,31 @@ def add_perlin_noise(
 
 def uniform_sampling_torch(points, npoints=1200):
     """
-    均匀采样点云中的点（矩阵操作版本，无for循环）
+    sampling the point cloud to a fixed number of points
 
-    参数:
-        points: torch.Tensor - 形状为[B, N, 3]或[N, 3]的点云
-        npoints: int - 采样后的点数
+    Args:
+        points: torch.Tensor -shape is [B, N, 3] or [N, 3]
+        npoints: int - number of points to sample
 
-    返回:
-        torch.Tensor - 采样点的索引，形状为[B, npoints]或[npoints]
+    Returns:
+        torch.Tensor - sampled point indices, shape is [B, npoints] or [npoints]
     """
-    # 检查输入维度
+    # examine the input shape
     if len(points.shape) == 3:  # [B, N, 3]
         batch_size, n, _ = points.shape
         batch_mode = True
     elif len(points.shape) == 2:  # [N, 3]
         n = points.shape[0]
         batch_mode = False
-        # 扩展为批处理模式以便统一处理
+        # expand to batch mode for unified processing
         points = points.unsqueeze(0)
         batch_size = 1
     else:
         raise ValueError(
-            f"输入点云维度不正确，应为[B, N, 3]或[N, 3]，当前为{points.shape}"
+            f"The input point cloud is not valid, expected shape is [B, N, 3] or [N, 3], but got {points.shape}"
         )
 
-    # 处理空点云情况
+    # process the case when there is no point
     if n == 0:
         if batch_mode:
             return torch.zeros(
@@ -976,81 +976,55 @@ def uniform_sampling_torch(points, npoints=1200):
         else:
             return torch.zeros(npoints, dtype=torch.int64, device=points.device)
 
-    # 创建索引张量 [B, N]
+    # create index tensor [B, N]
     indices = torch.arange(n, device=points.device).expand(batch_size, n)
 
     if n > npoints:
-        # 使用矩阵操作进行随机采样
-        # 为每个批次生成随机排列
+        # random sampling with batch processing
         rand_indices = torch.argsort(
             torch.rand(batch_size, n, device=points.device), dim=1
         )
-        # 选择前npoints个索引
         sampled_indices = torch.gather(indices, 1, rand_indices[:, :npoints])
     elif n < npoints:
-        # 计算重复次数和剩余数量
         num_repeat = npoints // n
         remaining = npoints - num_repeat * n
 
-        # 重复整个索引张量
         repeated_indices = indices.repeat_interleave(num_repeat, dim=1)
 
-        # 添加剩余的索引
         if remaining > 0:
             remaining_indices = indices[:, :remaining]
             sampled_indices = torch.cat([repeated_indices, remaining_indices], dim=1)
         else:
             sampled_indices = repeated_indices
     else:
-        # 如果点数正好等于npoints，直接返回索引
         sampled_indices = indices
 
-    # 返回结果
     if batch_mode:
         return sampled_indices
     else:
-        return sampled_indices[0]  # 移除批处理维度
+        return sampled_indices[0]  
 
 
 def pcd_filter_bound_torch(pc, bound):
-    """
-    根据给定边界过滤点云（尽量避免循环的版本）
-
-    参数:
-        cloud: torch.Tensor或dict - 点云数据，形状为[B, N, 3]、[N, 3]或包含'pos'键的字典
-        bound: list或torch.Tensor - 边界值 [x_min, x_max, y_min, y_max, z_min, z_max]
-        eps: float - 最小高度阈值
-        max_dis: float - 最大距离阈值
-
-    返回:
-        torch.Tensor - 在边界内的点的索引掩码，形状为[B, N]
-        或
-        list of torch.Tensor - 每个批次在边界内的点的索引
-    """
-    # 确保bound是tensor并且在正确的设备上
+    # boundtensor
     if not isinstance(bound, torch.Tensor):
         bound = torch.tensor(bound, device=pc.device)
 
-    # 检查输入维度
     batch_mode = len(pc.shape) == 3
 
     if not batch_mode:
         pc = pc.unsqueeze(0)  # [N, 3] -> [1, N, 3]
 
-    # 确保bound是正确的形状
+    # bound
     if len(bound.shape) == 1:
         bound = bound.unsqueeze(0).expand(pc.shape[0], -1)
 
-    # 计算边界条件
     within_bound_x = (pc[..., 0] > bound[:, 0:1]) & (pc[..., 0] < bound[:, 1:2])
     within_bound_y = (pc[..., 1] > bound[:, 2:3]) & (pc[..., 1] < bound[:, 3:4])
     within_bound_z = (pc[..., 2] > bound[:, 4:5]) & (pc[..., 2] < bound[:, 5:6])
 
-    # 组合所有条件
     within_bound = within_bound_x & within_bound_y & within_bound_z
 
-    # 两种返回方式：
-    # 1. 返回掩码
     if batch_mode:
         return within_bound
     else:
@@ -1313,8 +1287,8 @@ def create_pointcloud_from_rgbd_batch(
             # is done in the order (u, v) where u: (0, W-1) and v: (0 - H-1)
             batch_size, H, W, _ = rgb.shape
 
-            # 使用 permute 重排维度，从 [B, H, W, 3] 变为 [B, W, H, 3]
-            # 然后 reshape 为 [B, W*H, 3]
+            #  permute ， [B, H, W, 3]  [B, W, H, 3]
+            #  reshape  [B, W*H, 3]
             points_rgb = rgb.permute(0, 2, 1, 3).reshape(batch_size, W * H, 3)
         elif isinstance(rgb, (tuple, list)):
             # same color for all points

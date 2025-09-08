@@ -2,7 +2,10 @@ import time
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-from oculus_reader.reader import OculusReader
+try:
+    from oculus_reader.reader import OculusReader
+except ImportError:
+    print("oculus_reader not installed")
 
 import threading
 from multiprocessing import Lock
