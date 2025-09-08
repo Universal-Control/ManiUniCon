@@ -34,7 +34,7 @@ ManiUniCon is a comprehensive, multi-process robotics control framework designed
   </p>
 
 - **FR3**: FRANKA RESEARCH 3 robot with [franky-control](https://github.com/TimSchneider42/franky)
-- **FRPanda**: Franka Emika Panda robot with [deoxys_control](https://github.com/UT-Austin-RPL/deoxys_control/tree/main/deoxys/franka-interface)
+- **FRPanda**: Franka Emika Panda robot with [deoxys_control](https://github.com/UT-Austin-RPL/deoxys_control/tree/main/deoxys/franka-interface) (Note: Panda is no longer supported and does not work with latest libfranka)
 
 ### Sensors
 - **RealSense Cameras**: Intel RealSense depth cameras
