@@ -19,6 +19,7 @@ from maniunicon.robot_interface.base import RobotInterface
 from maniunicon.utils import meshcat_shapes
 from maniunicon.utils.ik_solver import IKSolver
 from maniunicon.utils.shared_memory.shared_storage import RobotAction, RobotState
+from maniunicon.utils.ruckig_utils import init_ruckig, update_ruckig
 
 
 class MeshcatInterface(RobotInterface):
@@ -110,6 +111,12 @@ class MeshcatInterface(RobotInterface):
 
             self._is_connected = True
             self._error_state = False
+
+            if self.config.get("use_ruckig", False):
+                # Initialize Ruckig
+                self.otg, self.otg_inp, self.otg_out, self.otg_res = init_ruckig(self.configuration.q, np.zeros(self.config["num_joints"]), self.dt)
+                self.last_command_time = time.time()
+
             print("Successfully connected to meshcat simulation")
             return True
 
@@ -187,6 +194,8 @@ class MeshcatInterface(RobotInterface):
 
         except Exception as e:
             print(f"Error getting robot state: {e}")
+            import traceback
+            traceback.print_exc()
             self._error_state = True
             if self._current_state is None:
                 raise RuntimeError("No robot state available")
@@ -194,6 +203,12 @@ class MeshcatInterface(RobotInterface):
 
     def send_action(self, action: RobotAction) -> bool:
         """Send a control action to the simulated robot."""
+        if not hasattr(self, "last_action_timestamp"):
+            self.last_action_timestamp = time.time()
+        else:
+            print(f"Time since last action: {(time.time() - self.last_action_timestamp) * 1000} ms")
+            self.last_action_timestamp = time.time()
+
         if not self.is_connected():
             return False
 
@@ -205,7 +220,7 @@ class MeshcatInterface(RobotInterface):
             if action.control_mode == "joint":
                 # Direct joint control
                 if action.joint_positions is not None:
-                    self.configuration.q = np.array(action.joint_positions)
+                    self._update_joint_positions(np.array(action.joint_positions))
                     self.ik_solver.set_current_configuration(self.configuration.q)
                 elif action.joint_velocities is not None:
                     self.configuration.integrate_inplace(
@@ -231,7 +246,7 @@ class MeshcatInterface(RobotInterface):
                     )
 
                     if success:
-                        self.configuration.q = q_solution
+                        self._update_joint_positions(q_solution)
                     else:
                         print("IK solution failed")
                         return False
@@ -247,6 +262,8 @@ class MeshcatInterface(RobotInterface):
 
         except Exception as e:
             print(f"Error sending action: {e}")
+            import traceback
+            traceback.print_exc()
             self._error_state = True
             return False
 
@@ -258,6 +275,15 @@ class MeshcatInterface(RobotInterface):
                 self._do_visualization_update()
         else:
             self._do_visualization_update()
+
+    def _update_joint_positions(self, q):
+        if self.config.get("use_ruckig", False):
+            q, dq_d, last_command_time = update_ruckig(self.otg, self.otg_inp, self.otg_out, self.otg_res, q, self.last_command_time, self.dt)
+            self.last_command_time = last_command_time
+            q = np.array(q)
+        if q is None:
+            q = self.configuration.q
+        self.configuration.q = q
 
     def _do_visualization_update(self):
         """Perform the actual visualization update."""

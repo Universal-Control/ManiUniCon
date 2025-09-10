@@ -6,6 +6,7 @@ import numpy as np
 from multiprocessing.synchronize import Event
 from loop_rate_limiters import RateLimiter
 from scipy.spatial.transform import Rotation
+from loguru import logger as lgr
 
 from maniunicon.robot_interface.base import RobotInterface
 from maniunicon.utils.shared_memory.shared_storage import SharedStorage, RobotAction
@@ -336,8 +337,9 @@ class Robot(mp.Process):
                         )
                 else:
                     if len(executing_actions) > 0:
+                        while executing_actions[0].target_timestamp < t_now and len(executing_actions) > 1:
+                            executing_actions = executing_actions[1:]
                         action = executing_actions[0]
-                        executing_actions = executing_actions[1:]
                     else:
                         action = None
 
