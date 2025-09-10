@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-多相机点云实时可视化程序
-读取保存的标定结果，将任意数量相机的点云转换到标记坐标系下，并用meshcat实时可视化
+Multi-camera point cloud real-time visualization program
+Reads saved calibration results, transforms point clouds from any number of cameras to marker coordinate system, and visualizes them in real-time using meshcat
 """
 
 import numpy as np
@@ -29,104 +29,104 @@ except ImportError:
 
 
 class MultiCameraPointCloudVisualizer:
-    """多相机点云可视化器"""
+    """Multi-camera point cloud visualizer"""
     
     def __init__(self, calib_files: List[str], max_points: int = 10000, 
                  voxel_size: float = 0.005, max_depth: float = 2.0):
         """
-        初始化可视化器
+        Initialize visualizer
         
         Args:
-            calib_files: 相机标定文件路径列表
-            max_points: 每个点云的最大点数（用于下采样）
-            voxel_size: 体素大小（用于下采样）
-            max_depth: 最大深度阈值（米）
+            calib_files: List of camera calibration file paths
+            max_points: Maximum number of points per point cloud (for downsampling)
+            voxel_size: Voxel size (for downsampling)
+            max_depth: Maximum depth threshold (meters)
         """
         if not REALSENSE_AVAILABLE:
             raise RuntimeError("pyrealsense2 not available")
         if not MESHCAT_AVAILABLE:
             raise RuntimeError("meshcat not available")
         
-        # 加载所有标定数据
+        # Load all calibration data
         self.calibrations = []
         self.cameras = []
         
         for i, calib_file in enumerate(calib_files):
             calib_data = np.load(calib_file, allow_pickle=True).item()
             
-            # 检查外参是否存在
+            # Check if extrinsics exist
             if calib_data['extrinsics'] is None:
-                print(f"警告: 相机 {calib_data['camera_serial']} 没有外参数据，跳过")
+                print(f"Warning: Camera {calib_data['camera_serial']} has no extrinsic data, skipping")
                 continue
             
             self.calibrations.append(calib_data)
-            print(f"加载相机{i+1}标定: {calib_data['camera_serial']}")
+            print(f"Loading camera {i+1} calibration: {calib_data['camera_serial']}")
         
         if len(self.calibrations) == 0:
-            raise ValueError("没有有效的相机标定数据")
+            raise ValueError("No valid camera calibration data")
         
         self.num_cameras = len(self.calibrations)
         self.max_points = max_points
         self.voxel_size = voxel_size
         self.max_depth = max_depth
         
-        # 为每个相机分配颜色（用于区分不同相机的点云）
+        # Assign colors for each camera (to distinguish point clouds from different cameras)
         self.camera_colors = self.generate_colors(self.num_cameras)
         
-        # 初始化meshcat
+        # Initialize meshcat
         self.vis = meshcat.Visualizer()
         self.vis.open()
-        print(f"Meshcat服务器已启动: {self.vis.url()}")
+        print(f"Meshcat server started: {self.vis.url()}")
         
-        # 设置坐标系可视化
+        # Setup coordinate frame visualization
         self.setup_coordinate_frames()
         
-        # 线程控制
+        # Thread control
         self.running = False
         self.viz_thread = None
         self.lock = threading.Lock()
     
     def generate_colors(self, n: int) -> List[np.ndarray]:
-        """为n个相机生成不同的颜色"""
-        # 使用HSV色彩空间生成均匀分布的颜色
+        """Generate different colors for n cameras"""
+        # Use HSV color space to generate evenly distributed colors
         colors = []
         for i in range(n):
             hue = i / n
-            # HSV到RGB转换
+            # HSV to RGB conversion
             import colorsys
             rgb = colorsys.hsv_to_rgb(hue, 0.8, 0.9)
             colors.append(np.array(rgb))
         return colors
     
     def setup_coordinate_frames(self):
-        """设置坐标系可视化"""
-        # 标记坐标系（世界坐标系）
+        """Setup coordinate frame visualization"""
+        # Marker coordinate system (world coordinate system)
         self.vis["frames"]["marker"].set_object(
             g.triad(scale=0.1)
         )
         
-        # 为每个相机设置坐标系
+        # Setup coordinate system for each camera
         for i, calib in enumerate(self.calibrations):
             camera_name = f"camera{i+1}"
             
-            # 相机坐标系
+            # Camera coordinate system
             self.vis["frames"][camera_name].set_object(
                 g.triad(scale=0.05)
             )
             
-            # 设置相机在标记坐标系下的位置
+            # Set camera position in marker coordinate system
             marker_to_cam = np.linalg.inv(calib['extrinsics'])
             self.vis["frames"][camera_name].set_transform(marker_to_cam)
             
-            # 添加标签（用小球表示）
+            # Add label (represented by small sphere)
             label_pos = marker_to_cam[:3, 3] + np.array([0, 0, 0.05])
             self.add_label(f"labels/{camera_name}", label_pos, self.camera_colors[i])
         
-        # 添加标记标签
+        # Add marker label
         self.add_label("labels/marker", [0, 0, 0.6], [1, 1, 1])
     
     def add_label(self, path: str, position: np.ndarray, color: List[float]):
-        """添加标签（用彩色小球表示）"""
+        """Add label (represented by colored sphere)"""
         color_hex = int(color[0]*255) << 16 | int(color[1]*255) << 8 | int(color[2]*255)
         self.vis[path].set_object(
             g.Sphere(radius=0.01),
@@ -137,19 +137,19 @@ class MultiCameraPointCloudVisualizer:
         )
     
     def init_cameras(self, width, height):
-        """初始化所有RealSense相机"""
+        """Initialize all RealSense cameras"""
         context = rs.context()
         devices = context.query_devices()
         available_serials = [dev.get_info(rs.camera_info.serial_number) for dev in devices]
         
-        print(f"检测到 {len(devices)} 个相机: {available_serials}")
+        print(f"Detected {len(devices)} cameras: {available_serials}")
         
-        # 检查所需相机是否都可用
+        # Check if all required cameras are available
         for calib in self.calibrations:
             if calib['camera_serial'] not in available_serials:
-                raise RuntimeError(f"相机 {calib['camera_serial']} 未连接")
+                raise RuntimeError(f"Camera {calib['camera_serial']} not connected")
         
-        # 初始化每个相机
+        # Initialize each camera
         for i, calib in enumerate(self.calibrations):
             camera_info = {
                 'index': i,
@@ -163,7 +163,7 @@ class MultiCameraPointCloudVisualizer:
                 'height': height
             }
             
-            # 配置相机
+            # Configure camera
             config = rs.config()
             config.enable_device(camera_info['serial'])
             config.enable_stream(rs.stream.depth, 
@@ -175,7 +175,7 @@ class MultiCameraPointCloudVisualizer:
                                camera_info['height'], 
                                rs.format.rgb8, 30)
             
-            # 启动相机
+            # Start camera
             profile = camera_info['pipeline'].start(config)
             camera_info['align'] = rs.align(rs.stream.color)
             color_profile = profile.get_stream(rs.stream.color)
@@ -185,44 +185,44 @@ class MultiCameraPointCloudVisualizer:
                 [0, color_intrinsics.fy, color_intrinsics.ppy],
                 [0, 0, 1]
             ], dtype=np.float64)
-            # 获取深度缩放因子
+            # Get depth scale factor
             depth_sensor = profile.get_device().first_depth_sensor()
             camera_info['depth_scale'] = depth_sensor.get_depth_scale()
             
             self.cameras.append(camera_info)
-            print(f"相机{i+1} ({camera_info['serial']}) 初始化完成")
+            print(f"Camera {i+1} ({camera_info['serial']}) initialization complete")
     
     def depth_to_pointcloud(self, color_image: np.ndarray, depth_image: np.ndarray, 
                           intrinsics: np.ndarray, depth_scale: float) -> tuple:
-        """将深度图转换为点云"""
+        """Convert depth map to point cloud"""
         height, width = depth_image.shape
         
-        # 创建像素坐标网格
+        # Create pixel coordinate grid
         xx, yy = np.meshgrid(np.arange(width), np.arange(height))
         
-        # 转换深度值到米
+        # Convert depth values to meters
         z = depth_image * depth_scale
         
-        # 过滤无效深度
+        # Filter invalid depths
         valid_mask = (z > 0) & (z < self.max_depth)
         
-        # 相机内参
+        # Camera intrinsics
         fx = intrinsics[0, 0]
         fy = intrinsics[1, 1]
         cx = intrinsics[0, 2]
         cy = intrinsics[1, 2]
         
-        # 计算3D坐标
+        # Calculate 3D coordinates
         x = (xx - cx) * z / fx
         y = (yy - cy) * z / fy
         
-        # 提取有效点
+        # Extract valid points
         points = np.stack([x[valid_mask], y[valid_mask], z[valid_mask]], axis=-1)
         colors = color_image[valid_mask] / 255.0
         
-        # 下采样
+        # Downsample
         if len(points) > self.max_points:
-            # 随机采样
+            # Random sampling
             indices = np.random.choice(len(points), self.max_points, replace=False)
             points = points[indices]
             colors = colors[indices]
@@ -230,18 +230,18 @@ class MultiCameraPointCloudVisualizer:
         return points, colors
     
     def transform_pointcloud(self, points: np.ndarray, transform: np.ndarray) -> np.ndarray:
-        """将点云转换到新坐标系"""
-        # 添加齐次坐标
+        """Transform point cloud to new coordinate system"""
+        # Add homogeneous coordinates
         points_h = np.hstack([points, np.ones((points.shape[0], 1))])
-        # 应用变换
+        # Apply transformation
         points_transformed = (transform @ points_h.T).T
         return points_transformed[:, :3]
     
     def update_visualization(self):
-        """更新可视化"""
+        """Update visualization"""
         for i, camera in enumerate(self.cameras):
             try:
-                # 获取相机数据
+                # Get camera data
                 frames = camera['pipeline'].wait_for_frames(timeout_ms=500)
                 aligned_frames = camera['align'].process(frames)
                 print(f"Get frame from camera {i}")
@@ -252,27 +252,27 @@ class MultiCameraPointCloudVisualizer:
                     depth_image = np.asanyarray(depth_frame.get_data())
                     color_image = np.asanyarray(color_frame.get_data())
                     
-                    # 生成点云
+                    # Generate point cloud
                     points, colors = self.depth_to_pointcloud(
                         color_image, depth_image, 
                         camera['intrinsics'], camera['depth_scale']
                     )
                     
-                    # 转换到标记坐标系
+                    # Transform to marker coordinate system
                     if len(points) > 0:
                         points_marker = self.transform_pointcloud(points, camera['extrinsics'])
                         
-                        # 选择是否使用原始颜色或相机特定颜色
-                        use_original_colors = True  # 可以设置为False来使用相机特定颜色
+                        # Choose whether to use original colors or camera-specific colors
+                        use_original_colors = True  # Can be set to False to use camera-specific colors
                         
                         if use_original_colors:
                             point_colors = colors.T
                         else:
-                            # 使用相机特定颜色
+                            # Use camera-specific colors
                             camera_color = self.camera_colors[camera['index']]
                             point_colors = np.tile(camera_color.reshape(-1, 1), (1, len(points)))
                         
-                        # 更新meshcat中的点云
+                        # Update point cloud in meshcat
                         self.vis[f"pointcloud{camera['index']+1}"].set_object(
                             g.PointCloud(
                                 position=points_marker.T,
@@ -282,13 +282,13 @@ class MultiCameraPointCloudVisualizer:
                         )
                         
             except Exception as e:
-                # 超时或其他错误，忽略这一帧
-                print(f"错误: {e}")
+                # Timeout or other error, ignore this frame
+                print(f"Error: {e}")
                 pass
     
     def visualization_loop(self):
-        """可视化循环线程"""
-        print("开始实时可视化...")
+        """Visualization loop thread"""
+        print("Starting real-time visualization...")
         frame_count = 0
         start_time = time.time()
         
@@ -303,40 +303,40 @@ class MultiCameraPointCloudVisualizer:
                 print(f"FPS: {fps:.1f}")
                 start_time = time.time()
             
-            time.sleep(0.01)  # 约100Hz更新率
+            time.sleep(0.01)  # Approximately 100Hz update rate
     
     def start(self, width, height):
-        """启动可视化"""
+        """Start visualization"""
         try:
-            # 初始化相机
+            # Initialize cameras
             self.init_cameras(width, height)
             
-            # # 预热相机
-            # print("预热相机中...")
+            # # Warm up cameras
+            # print("Warming up cameras...")
             # for _ in range(6):
             #     for camera in self.cameras:
-            #         print(f"预热相机 {camera['serial']}...")
+            #         print(f"Warming up camera {camera['serial']}...")
             #         camera['pipeline'].wait_for_frames()
             #         time.sleep(1)
                 
             
-            # 启动可视化线程
+            # Start visualization thread
             self.running = True
             self.viz_thread = threading.Thread(target=self.visualization_loop)
             self.viz_thread.start( )
             
-            print("\n可视化已启动!")
-            print("在浏览器中打开以下链接查看:")
+            print("\nVisualization started!")
+            print("Open the following link in browser to view:")
             print(f"  {self.vis.url()}")
-            print(f"\n正在可视化 {self.num_cameras} 个相机的点云")
-            print("按 Ctrl+C 停止...")
+            print(f"\nVisualizing point clouds from {self.num_cameras} cameras")
+            print("Press Ctrl+C to stop...")
             
-            # 主线程等待
+            # Main thread wait
             while self.running:
                 time.sleep(0.1)
                 
         except KeyboardInterrupt:
-            print("\n正在停止...")
+            print("\nStopping...")
             self.stop()
         except Exception as e:
             print(f"错误: {e}")
@@ -345,7 +345,7 @@ class MultiCameraPointCloudVisualizer:
             self.stop()
     
     def stop(self):
-        """停止可视化"""
+        """Stop visualization"""
         self.running = False
         
         if self.viz_thread:
@@ -353,36 +353,36 @@ class MultiCameraPointCloudVisualizer:
         
         for camera in self.cameras:
             camera['pipeline'].stop()
-            print(f"相机 {camera['serial']} 已停止")
+            print(f"Camera {camera['serial']} stopped")
         
-        print("可视化已停止")
+        print("Visualization stopped")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="多相机点云实时可视化")
+    parser = argparse.ArgumentParser(description="Multi-camera point cloud real-time visualization")
     parser.add_argument("calib_files", nargs='+', type=str, 
-                       help="相机标定文件列表 (.npy)")
+                       help="List of camera calibration files (.npy)")
     parser.add_argument("--max_points", type=int, default=200000, 
-                       help="每个点云的最大点数")
+                       help="Maximum number of points per point cloud")
     parser.add_argument("--voxel_size", type=float, default=0.001, 
-                       help="体素大小（米）")
+                       help="Voxel size (meters)")
     parser.add_argument("--max_depth", type=float, default=3.0,
-                       help="最大深度阈值（米）")
+                       help="Maximum depth threshold (meters)")
     parser.add_argument("--width", type=int, default=640, 
-                       help="相机宽度")
+                       help="Camera width")
     parser.add_argument("--height", type=int, default=480, 
-                       help="相机高度")
+                       help="Camera height")
     args = parser.parse_args()
     
-    # 检查文件是否存在
+    # Check if files exist
     for calib_file in args.calib_files:
         if not Path(calib_file).exists():
-            print(f"错误: 标定文件不存在: {calib_file}")
+            print(f"Error: Calibration file does not exist: {calib_file}")
             return
     
-    print(f"准备可视化 {len(args.calib_files)} 个相机")
+    print(f"Preparing to visualize {len(args.calib_files)} cameras")
     
-    # 创建可视化器
+    # Create visualizer
     visualizer = MultiCameraPointCloudVisualizer(
         args.calib_files,
         max_points=args.max_points,
@@ -390,7 +390,7 @@ def main():
         max_depth=args.max_depth
     )
     
-    # 启动可视化
+    # Start visualization
     visualizer.start(args.width, args.height)
 
 

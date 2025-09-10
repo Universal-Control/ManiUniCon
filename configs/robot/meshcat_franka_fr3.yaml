@@ -3,8 +3,8 @@ name: "meshcat-franka"
 robot_interface:
   _target_: maniunicon.robot_interface.meshcat.MeshcatInterface
   config:
-    urdf_path: "assets/franka_urdf/panda.urdf"
-    urdf_package_dirs: ["assets/franka_urdf"]
+    urdf_path: "assets/franka_fr3_urdf/robot.urdf"
+    urdf_package_dirs: ["assets/franka_fr3_urdf"]
     num_joints: 7
     init_qpos: [0.0, 0.0, 0.0, -2.2, 0.0, 2.2, 0.7]
     joint_limits:
