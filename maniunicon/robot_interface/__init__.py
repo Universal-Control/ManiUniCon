@@ -17,9 +17,18 @@ except ImportError:
     )
 
 
+try:
+    from maniunicon.robot_interface import franka_fr3_franky
+except ImportError:
+    print(
+        "Franka FR3 Franky interface not installed. Please install franka_ros"
+    )
+
+
 __all__ = [
     "dummy",
     "meshcat",
     "ur5_robotiq",
     "franka_panda_deoxys",
+    "franka_fr3_franky",
 ]
