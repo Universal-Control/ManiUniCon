@@ -1,5 +1,6 @@
 """Gello-based teleoperation policy for robot control."""
 
+import os
 import time
 from typing import Optional
 import numpy as np
@@ -15,7 +16,17 @@ from maniunicon.utils.shared_memory.shared_storage import (
     RobotState,
 )
 from maniunicon.core.policy import BasePolicy
+from maniunicon.utils.data import get_next_episode_dir
+from maniunicon.utils.filter import JointSpaceSmoother, AdaptiveButterworth
 
+DEBUG = True
+if DEBUG:
+    import os
+    import shutil
+    if os.path.exists(f"/home/ydu/xiaoshen/franka_install/ManiUniCon/outputs/22222/joints-command-before-smoothing"):
+        shutil.rmtree(f"/home/ydu/xiaoshen/franka_install/ManiUniCon/outputs/22222/joints-command-before-smoothing")
+    if os.path.exists(f"/home/ydu/xiaoshen/franka_install/ManiUniCon/outputs/22222/joints-command-after-smoothing"):
+        shutil.rmtree(f"/home/ydu/xiaoshen/franka_install/ManiUniCon/outputs/22222/joints-command-after-smoothing")
 
 class GelloPolicy(BasePolicy):
     """Gello-based teleoperation policy.
@@ -116,6 +127,17 @@ class GelloPolicy(BasePolicy):
                 name="gello_policy",
             )
 
+            smoother = JointSpaceSmoother(
+                num_joints=self.num_joints,
+                alpha_ewma=0.3,
+                window_size=5,
+                velocity_limit=np.array([10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0]),
+                acceleration_limit=np.array([10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0]),
+                deadband_threshold=0.001,
+                adaptive_alpha=True
+            )
+            butterworth = AdaptiveButterworth(num_joints=self.num_joints, cutoff_freq=10.0, sample_rate=self.frequency)
+
             while self.shared_storage.is_running.value and not self._should_disconnect:
                 # Handle reset
                 if self.reset_event is not None and self.reset_event.is_set():
@@ -167,11 +189,29 @@ class GelloPolicy(BasePolicy):
                         target_joint_positions, self._current_joint_positions
                     )
 
+                    # Create and send robot actions
+                    current_time = time.time()
+
+                    # Apply safety clipping
+                    clipped_joint_positions = self._clip_joint_positions(
+                        target_joint_positions, self._current_joint_positions
+                    )
+
+                    if DEBUG:
+                        os.makedirs(f"/home/ydu/xiaoshen/franka_install/ManiUniCon/outputs/22222/joints-command-before-smoothing", exist_ok=True)
+                        np.save(f"/home/ydu/xiaoshen/franka_install/ManiUniCon/outputs/22222/joints-command-before-smoothing/{time.time_ns()}.npy", clipped_joint_positions)
+
+                    # Apply smoothing
+                    clipped_joint_positions = smoother.smooth(clipped_joint_positions, timestamp=current_time)
+                    clipped_joint_positions = butterworth.filter(clipped_joint_positions)
+
+                    if DEBUG:
+                        os.makedirs(f"/home/ydu/xiaoshen/franka_install/ManiUniCon/outputs/22222/joints-command-after-smoothing", exist_ok=True)
+                        np.save(f"/home/ydu/xiaoshen/franka_install/ManiUniCon/outputs/22222/joints-command-after-smoothing/{time.time_ns()}.npy", clipped_joint_positions)
+
                     # Update current positions for next iteration
                     self._current_joint_positions = clipped_joint_positions.copy()
 
-                    # Create and send robot actions
-                    current_time = time.time()
                     for i in range(self.control_interval):
                         action = RobotAction(
                             joint_positions=clipped_joint_positions,
@@ -179,7 +219,7 @@ class GelloPolicy(BasePolicy):
                             control_mode="joint",
                             timestamp=current_time,
                             target_timestamp=current_time
-                            + (i + 4) * self.dt
+                            + (i + 2) * self.dt
                             - self.command_latency,
                         )
 

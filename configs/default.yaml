@@ -1,6 +1,6 @@
 sensor_frequency: 30
 policy_frequency: 30
-control_frequency: 125
+control_frequency: 200
 state_update_frequency: 30
 get_max_k: 3
 device: cuda:0

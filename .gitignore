@@ -93,3 +93,4 @@ references/
 **/pretrained_weights
 **/outputs
 reference_repos/
+tests/

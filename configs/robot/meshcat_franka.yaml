@@ -18,6 +18,7 @@ robot_interface:
     lookahead_time: 0.1  # Lookahead time for trajectory following
     gain: 300  # Servo gain
     dt: ${eval:'1 / ${control_frequency}'}  # Control timestep (125Hz)
+    use_ruckig: false
 shared_storage: none # to be replaced
 control_frequency: ${control_frequency}
 state_update_frequency: ${state_update_frequency}
