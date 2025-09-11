@@ -22,6 +22,16 @@ HARD_PATH_PATTERNS = [
     re.compile(r"^/opt/[^/].+"),
 ]
 
+# Exact absolute paths that are intentionally allowed in the repo.
+# Example: serial device default for specific hardware.
+ALLOWED_ABS_PATHS: set[str] = {}
+
+# Allowed absolute path prefixes. Any string beginning with one of these
+# prefixes will be considered acceptable and not flagged.
+ALLOWED_ABS_PREFIXES: tuple[str, ...] = (
+    "/dev/",  # allow device files like /dev/ttyUSB0
+)
+
 
 def get_changed_py_files(base_ref: str) -> list[Path]:
     try:
@@ -38,8 +48,17 @@ def list_repo_py_files() -> list[Path]:
 
 def is_hardcoded_path(s: str) -> bool:
     s_stripped = s.strip()
+
+    # Whitelist specific known-good absolute paths
+    if s_stripped in ALLOWED_ABS_PATHS:
+        return False
+
+    # Allow any path under /dev/*, including "/dev" itself
+    if s_stripped == "/dev" or any(s_stripped.startswith(p) for p in ALLOWED_ABS_PREFIXES):
+        return False
+
     for pat in HARD_PATH_PATTERNS:
-        if pat.search(s_stripped.replace("/", "/").replace("\\", "\\")):
+        if pat.search(s_stripped):
             return True
     return False
 
