@@ -114,7 +114,9 @@ class MeshcatInterface(RobotInterface):
 
             if self.config.get("use_ruckig", False):
                 # Initialize Ruckig
-                self.otg, self.otg_inp, self.otg_out, self.otg_res = init_ruckig(self.configuration.q, np.zeros(self.config["num_joints"]), self.dt)
+                self.otg, self.otg_inp, self.otg_out, self.otg_res = init_ruckig(
+                    self.configuration.q, np.zeros(self.config["num_joints"]), self.dt
+                )
                 self.last_command_time = time.time()
 
             print("Successfully connected to meshcat simulation")
@@ -195,6 +197,7 @@ class MeshcatInterface(RobotInterface):
         except Exception as e:
             print(f"Error getting robot state: {e}")
             import traceback
+
             traceback.print_exc()
             self._error_state = True
             if self._current_state is None:
@@ -206,7 +209,9 @@ class MeshcatInterface(RobotInterface):
         if not hasattr(self, "last_action_timestamp"):
             self.last_action_timestamp = time.time()
         else:
-            print(f"Time since last action: {(time.time() - self.last_action_timestamp) * 1000} ms")
+            print(
+                f"Time since last action: {(time.time() - self.last_action_timestamp) * 1000} ms"
+            )
             self.last_action_timestamp = time.time()
 
         if not self.is_connected():
@@ -263,6 +268,7 @@ class MeshcatInterface(RobotInterface):
         except Exception as e:
             print(f"Error sending action: {e}")
             import traceback
+
             traceback.print_exc()
             self._error_state = True
             return False
@@ -278,7 +284,15 @@ class MeshcatInterface(RobotInterface):
 
     def _update_joint_positions(self, q):
         if self.config.get("use_ruckig", False):
-            q, dq_d, last_command_time = update_ruckig(self.otg, self.otg_inp, self.otg_out, self.otg_res, q, self.last_command_time, self.dt)
+            q, dq_d, last_command_time = update_ruckig(
+                self.otg,
+                self.otg_inp,
+                self.otg_out,
+                self.otg_res,
+                q,
+                self.last_command_time,
+                self.dt,
+            )
             self.last_command_time = last_command_time
             q = np.array(q)
         if q is None:

@@ -20,15 +20,12 @@ from maniunicon.robot_interface.base import RobotInterface
 from maniunicon.utils.ik_solver import IKSolver
 from maniunicon.utils.shared_memory.shared_storage import RobotAction, RobotState
 from maniunicon.utils.ruckig_utils import init_ruckig, update_ruckig
-from maniunicon.utils.filter import LowPassFilter, JointSpaceSmoother, AdaptiveButterworth
+from maniunicon.utils.filter import (
+    LowPassFilter,
+    JointSpaceSmoother,
+    AdaptiveButterworth,
+)
 
-DEBUG = True
-if DEBUG:
-    import os
-    import shutil
-    if os.path.exists(f"/home/ydu/xiaoshen/franka_install/ManiUniCon/outputs/22222/joints"):
-        shutil.rmtree(f"/home/ydu/xiaoshen/franka_install/ManiUniCon/outputs/22222/joints")
-    os.makedirs(f"/home/ydu/xiaoshen/franka_install/ManiUniCon/outputs/22222/joints", exist_ok=True)
 
 class FRANKAInterface(RobotInterface):
     """FRANKA robot plus parallel gripper interface with direct connection management."""
@@ -83,12 +80,25 @@ class FRANKAInterface(RobotInterface):
             self._is_connected = True
             self._error_state = False
             current_q = self.get_state().joint_positions
+            # use [ruckig](https://ruckig.com) to smooth the trajectories
             if self.config.get("use_ruckig", False):
                 # Initialize Ruckig
-                self.otg, self.otg_inp, self.otg_out, self.otg_res = init_ruckig(current_q, np.zeros(self.config["num_joints"]), self.dt)
+                self.otg, self.otg_inp, self.otg_out, self.otg_res = init_ruckig(
+                    current_q, np.zeros(self.config["num_joints"]), self.dt
+                )
                 self.last_command_time = time.time()
-            self.smoother = JointSpaceSmoother(num_joints=self.config["num_joints"], alpha_ewma=0.3, window_size=5, velocity_limit=np.array([10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0]), acceleration_limit=np.array([10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0]), deadband_threshold=0.001, adaptive_alpha=True)
-            self.butterworth = AdaptiveButterworth(num_joints=self.config["num_joints"], cutoff_freq=5.0, sample_rate=60.0)
+            self.smoother = JointSpaceSmoother(
+                num_joints=self.config["num_joints"],
+                alpha_ewma=0.3,
+                window_size=5,
+                velocity_limit=np.array([10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0]),
+                acceleration_limit=np.array([10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0]),
+                deadband_threshold=0.001,
+                adaptive_alpha=True,
+            )
+            self.butterworth = AdaptiveButterworth(
+                num_joints=self.config["num_joints"], cutoff_freq=5.0, sample_rate=60.0
+            )
             self._first_action_arrived = False
             print(f"Successfully connected to UR5 robot at {self.ip}")
             return True
@@ -122,7 +132,9 @@ class FRANKAInterface(RobotInterface):
         """Reset the robot to the initial configuration."""
         if self.robot is not None:
             print("init!")
-            self.robot.move(JointMotion(self.config["init_qpos"], relative_dynamics_factor=0.4))
+            self.robot.move(
+                JointMotion(self.config["init_qpos"], relative_dynamics_factor=0.4)
+            )
             time.sleep(1)
             self.gripper.open(self.gripper_control_speed)
             self.gripper_state = np.array([0.0])  # Gripper open state
@@ -193,9 +205,9 @@ class FRANKAInterface(RobotInterface):
                 self._first_action_arrived = True
                 self._first_time_get_action = time.time()
         else:
-            print(
-                f"Time since last get action: {(time.time() - self._last_time_get_action) * 1000} ms"
-            )
+            # print(
+            #     f"Time since last get action: {(time.time() - self._last_time_get_action) * 1000} ms"
+            # )
             self._last_time_get_action = time.time()
 
         if not self.is_connected():
@@ -209,29 +221,49 @@ class FRANKAInterface(RobotInterface):
             if action.control_mode == "joint":
                 # Direct joint control
                 if action.joint_positions is not None:
-                    action.joint_positions, delta_joint_positions = self._clip_joint_positions(
-                        action.joint_positions, min_threshold=0.0, return_delta=True
+                    action.joint_positions, delta_joint_positions = (
+                        self._clip_joint_positions(
+                            action.joint_positions, min_threshold=0.0, return_delta=True
+                        )
                     )
                     if self.config.get("use_ruckig", False):
-                        action.joint_positions, _, last_command_time = update_ruckig(self.otg, self.otg_inp, self.otg_out, self.otg_res, action.joint_positions, self.last_command_time, self.dt)
+                        action.joint_positions, _, last_command_time = update_ruckig(
+                            self.otg,
+                            self.otg_inp,
+                            self.otg_out,
+                            self.otg_res,
+                            action.joint_positions,
+                            self.last_command_time,
+                            self.dt,
+                        )
                         self.last_command_time = last_command_time
                         action.joint_positions = np.array(action.joint_positions)
-                    action.joint_positions = self.smoother.smooth(action.joint_positions, timestamp=time.time())
-                    action.joint_positions = self.butterworth.filter(action.joint_positions)
-                    if DEBUG:
-                        os.makedirs(f"/home/ydu/xiaoshen/franka_install/ManiUniCon/outputs/22222/joints", exist_ok=True)
-                        np.save(f"/home/ydu/xiaoshen/franka_install/ManiUniCon/outputs/22222/joints/{time.time_ns()}.npy", action.joint_positions)
-                    max_relative_dynamics_factor = 1 / (np.abs(delta_joint_positions).max() / self.dt) * 300
-                    print(f"max_relative_dynamics_factor before clipping: {max_relative_dynamics_factor}")
-                    max_relative_dynamics_factor = min(max_relative_dynamics_factor, 0.99)
-                    max_relative_dynamics_factor = max(max_relative_dynamics_factor, 0.5)
+                    action.joint_positions = self.smoother.smooth(
+                        action.joint_positions, timestamp=time.time()
+                    )
+                    action.joint_positions = self.butterworth.filter(
+                        action.joint_positions
+                    )
+                    max_relative_dynamics_factor = (
+                        1 / (np.abs(delta_joint_positions).max() / self.dt) * 300
+                    )
+                    # print(f"max_relative_dynamics_factor before clipping: {max_relative_dynamics_factor}")
+                    max_relative_dynamics_factor = min(
+                        max_relative_dynamics_factor, 0.99
+                    )
+                    max_relative_dynamics_factor = max(
+                        max_relative_dynamics_factor, 0.5
+                    )
                     if self._last_time_get_action - self._first_time_get_action < 1.0:
                         max_relative_dynamics_factor = 0.4
                     # if delta_joint_positions.max() / self.dt < 0.4:
                     #     max_relative_dynamics_factor = RelativeDynamicsFactor(
                     #         velocity=0.99, acceleration=0.5, jerk=0.1
                     #     )
-                    motion = JointMotion(action.joint_positions,relative_dynamics_factor=max_relative_dynamics_factor)
+                    motion = JointMotion(
+                        action.joint_positions,
+                        relative_dynamics_factor=max_relative_dynamics_factor,
+                    )
                     self.robot.move(motion, asynchronous=True)
                 elif action.joint_velocities is not None:
                     motion = JointVelocityMotion(action.joint_velocities)
@@ -397,7 +429,10 @@ class FRANKAInterface(RobotInterface):
             np.abs(delta_joint_positions) < min_threshold, 0, delta_joint_positions
         )
         if return_delta:
-            return current_joint_positions + delta_joint_positions, delta_joint_positions
+            return (
+                current_joint_positions + delta_joint_positions,
+                delta_joint_positions,
+            )
         else:
             return current_joint_positions + delta_joint_positions
 

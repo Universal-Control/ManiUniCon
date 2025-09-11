@@ -5,10 +5,10 @@ import warnings
 
 _POLICIES = {
     "TorchModelPolicy": "torch_model",
-    "SpaceMousePolicy": "spacemouse", 
+    "SpaceMousePolicy": "spacemouse",
     "KeyboardPolicy": "keyboard",
     "QuestPolicy": "quest",
-    "GelloPolicy":"gello",
+    "GelloPolicy": "gello",
 }
 
 __all__ = []

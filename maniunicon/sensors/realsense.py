@@ -338,7 +338,7 @@ class RealSenseSensor(BaseSensor):
             camera_process.start(wait=False)
 
             # Small delay between camera starts to avoid conflicts
-            time.sleep(0.5)
+            time.sleep(1)
 
         # Wait for all cameras to be ready
         if self.verbose:

@@ -134,11 +134,11 @@ class SingleZedCamera(mp.Process):
             init_params.coordinate_units = self._get_coordinate_units_enum()
             init_params.depth_minimum_distance = self.minimum_distance
             init_params.depth_maximum_distance = self.maximum_distance
-            
+
             # Set serial number if provided
             if self.serial_number is not None:
                 init_params.set_from_serial_number(self.serial_number)
-            
+
             # Enable positional tracking if needed
             init_params.coordinate_system = sl.COORDINATE_SYSTEM.RIGHT_HANDED_Y_UP
 
@@ -152,12 +152,14 @@ class SingleZedCamera(mp.Process):
 
                 # Get camera calibration parameters
                 camera_info = zed.get_camera_information()
-                calibration_params = camera_info.camera_configuration.calibration_parameters
+                calibration_params = (
+                    camera_info.camera_configuration.calibration_parameters
+                )
                 left_cam = calibration_params.left_cam
-                
+
                 # Extract intrinsics (fx, fy, cx, cy)
                 intr = np.array([left_cam.fx, left_cam.fy, left_cam.cx, left_cam.cy])
-                
+
                 # Set runtime parameters
                 runtime_params = sl.RuntimeParameters()
                 runtime_params.sensing_mode = sl.SENSING_MODE.STANDARD
@@ -167,7 +169,7 @@ class SingleZedCamera(mp.Process):
                 # Create Mat objects for retrieving data
                 image = sl.Mat()
                 depth = sl.Mat()
-                
+
                 # put frequency regulation
                 put_idx = None
                 put_start_time = self.put_start_time
@@ -199,28 +201,30 @@ class SingleZedCamera(mp.Process):
                     # Grab an image
                     if zed.grab(runtime_params) == sl.ERROR_CODE.SUCCESS:
                         receive_time = time.time()
-                        
+
                         # Retrieve left image (RGB)
                         zed.retrieve_image(image, sl.VIEW.LEFT)
                         # Convert from BGRA to RGB
                         color_bgra = image.get_data()
                         color = color_bgra[:, :, :3][:, :, ::-1]  # BGRA to RGB
-                        
+
                         # Retrieve depth map
                         zed.retrieve_measure(depth, sl.MEASURE.DEPTH)
                         depth_data = depth.get_data()
-                        
+
                         # Get timestamp from camera
                         timestamp = zed.get_timestamp(sl.TIME_REFERENCE.IMAGE)
                         # Convert from nanoseconds to seconds
                         capture_time = timestamp.get_nanoseconds() / 1e9
-                        
-                        local_idxs, global_idxs, put_idx = get_accumulate_timestamp_idxs(
-                            timestamps=[receive_time],
-                            start_time=put_start_time,
-                            dt=1.0 / self.fps,
-                            next_global_idx=put_idx,
-                            allow_negative=True,
+
+                        local_idxs, global_idxs, put_idx = (
+                            get_accumulate_timestamp_idxs(
+                                timestamps=[receive_time],
+                                start_time=put_start_time,
+                                dt=1.0 / self.fps,
+                                next_global_idx=put_idx,
+                                allow_negative=True,
+                            )
                         )
 
                         for step_idx in global_idxs:
@@ -233,7 +237,9 @@ class SingleZedCamera(mp.Process):
                                 step_idx=step_idx,
                                 timestamp=receive_time,
                             )
-                            self.shared_storage.write_single_camera(self.camera_name, data)
+                            self.shared_storage.write_single_camera(
+                                self.camera_name, data
+                            )
 
                         # Signal ready
                         if iter_idx == 0:
@@ -261,7 +267,7 @@ class SingleZedCamera(mp.Process):
             self.shared_storage.error_state.value = True
         finally:
             # Close the camera
-            if 'zed' in locals():
+            if "zed" in locals():
                 zed.close()
             self.ready_event.set()  # Ensure ready event is set even on error
             if self.verbose:
@@ -324,14 +330,18 @@ class ZedSensor(BaseSensor):
                         overlay_img = cv2.imread(overlay_path)
                         if overlay_img is not None:
                             # Get resolution dimensions
-                            resolution_str = self.camera_config[cam_name].get("resolution", "HD720")
+                            resolution_str = self.camera_config[cam_name].get(
+                                "resolution", "HD720"
+                            )
                             resolution_map = {
                                 "HD2K": (2208, 1242),
                                 "HD1080": (1920, 1080),
                                 "HD720": (1280, 720),
                                 "VGA": (672, 376),
                             }
-                            width, height = resolution_map.get(resolution_str, (1280, 720))
+                            width, height = resolution_map.get(
+                                resolution_str, (1280, 720)
+                            )
                             overlay_img = cv2.resize(overlay_img, (width, height))
                             self.camera_overlays[cam_name] = overlay_img
                             if self.verbose:
@@ -367,9 +377,15 @@ class ZedSensor(BaseSensor):
                 resolution=self.camera_config[cam_name].get("resolution", "HD720"),
                 fps=self.camera_config[cam_name].get("fps", 30),
                 depth_mode=self.camera_config[cam_name].get("depth_mode", "ULTRA"),
-                coordinate_units=self.camera_config[cam_name].get("coordinate_units", "METER"),
-                minimum_distance=self.camera_config[cam_name].get("minimum_distance", 0.2),
-                maximum_distance=self.camera_config[cam_name].get("maximum_distance", 10.0),
+                coordinate_units=self.camera_config[cam_name].get(
+                    "coordinate_units", "METER"
+                ),
+                minimum_distance=self.camera_config[cam_name].get(
+                    "minimum_distance", 0.2
+                ),
+                maximum_distance=self.camera_config[cam_name].get(
+                    "maximum_distance", 10.0
+                ),
                 verbose=self.verbose,
             )
 

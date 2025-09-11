@@ -136,29 +136,29 @@ def parse_device_specs(specs_dict):
     device_specs = {}
     for name, spec in specs_dict.items():
         axis_mapping = {}
-        for axis_name, axis_data in spec['axis_mapping'].items():
+        for axis_name, axis_data in spec["axis_mapping"].items():
             axis_mapping[axis_name] = AxisSpec(
-                channel=axis_data['channel'],
-                byte1=axis_data['byte1'],
-                byte2=axis_data['byte2'],
-                scale=axis_data['scale']
+                channel=axis_data["channel"],
+                byte1=axis_data["byte1"],
+                byte2=axis_data["byte2"],
+                scale=axis_data["scale"],
             )
-        
+
         button_mapping = {}
-        for button_name, button_data in spec['button_mapping'].items():
+        for button_name, button_data in spec["button_mapping"].items():
             button_mapping[button_name] = ButtonSpec(
-                channel=button_data['channel'],
-                byte=button_data['byte'],
-                bit=button_data['bit']
+                channel=button_data["channel"],
+                byte=button_data["byte"],
+                bit=button_data["bit"],
             )
-        
+
         device_specs[name] = DeviceSpec(
-            vendor_id=spec['vendor_id'],
-            product_id=spec['product_id'],
+            vendor_id=spec["vendor_id"],
+            product_id=spec["product_id"],
             axis_mapping=axis_mapping,
             button_mapping=button_mapping,
-            axis_scale=spec['axis_scale'],
-            max_bytes=spec['max_bytes']
+            axis_scale=spec["axis_scale"],
+            max_bytes=spec["max_bytes"],
         )
     return device_specs
 
@@ -181,10 +181,16 @@ def get_available_devices(device_specs):
 class SpaceMouseThread:
     """A daemon thread to listen to SpaceMouse."""
 
-    def __init__(self, device_spec: DeviceSpec | None = None, device_specs_dict: dict | None = None):
+    def __init__(
+        self,
+        device_spec: DeviceSpec | None = None,
+        device_specs_dict: dict | None = None,
+    ):
         if device_spec is None:
             if device_specs_dict is None:
-                raise RuntimeError("Either device_spec or device_specs_dict must be provided")
+                raise RuntimeError(
+                    "Either device_spec or device_specs_dict must be provided"
+                )
             device_specs = parse_device_specs(device_specs_dict)
             available = get_available_devices(device_specs)
             if len(available) == 0:
@@ -413,7 +419,9 @@ class SpaceMousePolicy(BasePolicy):
         try:
             # Connect to SpaceMouse
             try:
-                self._spacemouse_thread = SpaceMouseThread(device_specs_dict=self.device_specs)
+                self._spacemouse_thread = SpaceMouseThread(
+                    device_specs_dict=self.device_specs
+                )
                 print("SpaceMouse connected successfully")
                 print("\nSpaceMouse controls:")
                 print("Translation: Move end-effector in 3D space (X, Y, Z axes)")

@@ -3,7 +3,10 @@ import math
 import numpy as np
 import time
 
-def init_ruckig(init_q: np.ndarray, init_dq: np.ndarray, DT: float) -> tuple[Ruckig, InputParameter, OutputParameter, Result]:
+
+def init_ruckig(
+    init_q: np.ndarray, init_dq: np.ndarray, DT: float
+) -> tuple[Ruckig, InputParameter, OutputParameter, Result]:
     num_joints = init_q.shape[0]
     otg = Ruckig(num_joints, DT)
     otg_inp = InputParameter(num_joints)
@@ -17,7 +20,16 @@ def init_ruckig(init_q: np.ndarray, init_dq: np.ndarray, DT: float) -> tuple[Ruc
     otg_res = Result.Finished
     return otg, otg_inp, otg_out, otg_res
 
-def update_ruckig(otg: Ruckig, otg_inp: InputParameter, otg_out: OutputParameter, otg_res: Result, target_q: np.ndarray, last_command_time: float, dt: float):
+
+def update_ruckig(
+    otg: Ruckig,
+    otg_inp: InputParameter,
+    otg_out: OutputParameter,
+    otg_res: Result,
+    target_q: np.ndarray,
+    last_command_time: float,
+    dt: float,
+):
     if target_q is not None:
         otg_inp.target_position = target_q.copy()
         last_command_time = time.time()

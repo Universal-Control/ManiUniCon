@@ -1,0 +1,79 @@
+realsense:
+  _target_: maniunicon.sensors.realsense.RealSenseSensor
+  frequency: ${sensor_frequency}
+  verbose: true
+  camera_config:
+    camera_names:
+      camera_0: "247122072484"
+      camera_1: "247122073441"
+      camera_2: "242322073615"
+      camera_3: "250122074897"
+
+    multi_camera_get_max_k: ${get_max_k}
+    multi_camera_get_time_budget: 0.3
+    multi_camera_put_desired_frequency: 30
+
+    camera_0:
+      resolution: [640, 480]
+      fps: 30
+      single_camera_get_max_k: ${get_max_k}
+      single_camera_get_time_budget: 0.2
+      single_camera_put_desired_frequency: ${data.camera_config.multi_camera_put_desired_frequency}
+      transform: none  # to be replaced
+      transform_T: none  # to be replaced
+      pose:
+        position: [-0.44819146, -0.52473904,  0.73367892]
+        orientation: [-0.41145996752252506, 0.8055178800898264, -0.38461257712811175, 0.18415972821664053]
+      intrinsics:
+        fx: 908.9296875
+        fy: 908.45751953
+        cx: 634.62695312
+        cy: 376.95831299
+    camera_1:
+      resolution: [640, 480]
+      fps: 30
+      single_camera_get_max_k: ${get_max_k}
+      single_camera_get_time_budget: 0.2
+      single_camera_put_desired_frequency: ${data.camera_config.multi_camera_put_desired_frequency}
+      transform: none  # to be replaced
+      transform_T: none  # to be replaced
+      pose:
+        position: [-0.05315955,  0.99380154,  0.85749338]
+        orientation: [-0.016867796992619574, 0.03493036842049613, 0.8881805336707327, -0.4578544379985813]
+      intrinsics:
+        fx: 908.85449219
+        fy: 908.97753906
+        cx: 645.86279297
+        cy: 373.103302
+    camera_2:
+      resolution: [640, 480]
+      fps: 30
+      single_camera_get_max_k: ${get_max_k}
+      single_camera_get_time_budget: 0.2
+      single_camera_put_desired_frequency: ${data.camera_config.multi_camera_put_desired_frequency}
+      transform: none  # to be replaced
+      transform_T: none  # to be replaced
+      pose:
+        position: [ 0.8854426 , -0.22639647,  0.65760775]
+        orientation: [-0.4551920273537134, 0.7151939595209789, 0.4553652001385641, -0.2719197547091534]
+      intrinsics:
+        fx: 911.70
+        fy: 912.22
+        cx: 634.95
+        cy: 378.51
+    camera_3:
+      resolution: [640, 480]
+      fps: 30
+      single_camera_get_max_k: ${get_max_k}
+      single_camera_get_time_budget: 0.2
+      single_camera_put_desired_frequency: ${data.camera_config.multi_camera_put_desired_frequency}
+      transform: none  # to be replaced
+      transform_T: none  # to be replaced
+      pose:
+        position: [ 0.05411811, -0.64856571,  0.88802332]
+        orientation: [-0.43726156038881625, 0.899070018013565, 0.021575601287730267, -0.003150229277120056]
+      intrinsics:
+        fx: 906.88140869
+        fy: 906.75091553
+        cx: 650.36242676
+        cy: 366.29620361

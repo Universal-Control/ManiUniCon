@@ -43,6 +43,7 @@ def transform_points(points, transform, transform_T):
     points += transform
     return points
 
+
 def save_view_point(pcd, filename):
     vis = o3d.visualization.Visualizer()
     vis.create_window()
@@ -1002,7 +1003,7 @@ def uniform_sampling_torch(points, npoints=1200):
     if batch_mode:
         return sampled_indices
     else:
-        return sampled_indices[0]  
+        return sampled_indices[0]
 
 
 def pcd_filter_bound_torch(pc, bound):

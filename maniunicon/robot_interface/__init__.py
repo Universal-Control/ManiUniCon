@@ -12,17 +12,13 @@ except ImportError:
 try:
     from maniunicon.robot_interface import franka_panda_deoxys
 except ImportError:
-    print(
-        "Franka Panda deoxys interface not installed. Please install deoxys_control"
-    )
+    print("Franka Panda deoxys interface not installed. Please install deoxys_control")
 
 
 try:
     from maniunicon.robot_interface import franka_fr3_franky
 except ImportError:
-    print(
-        "Franka FR3 Franky interface not installed. Please install franka_ros"
-    )
+    print("Franka FR3 Franky interface not installed. Please install franka_ros")
 
 
 __all__ = [

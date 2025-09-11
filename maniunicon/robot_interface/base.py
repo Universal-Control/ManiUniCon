@@ -90,12 +90,24 @@ class RobotInterface(ABC):
         """Validate if an action is within robot limits."""
         if action.control_mode == "joint":
             if action.joint_positions is not None:
-                action.joint_positions = np.clip(action.joint_positions, self.joint_limits["min"], self.joint_limits["max"])
+                action.joint_positions = np.clip(
+                    action.joint_positions,
+                    self.joint_limits["min"],
+                    self.joint_limits["max"],
+                )
 
             elif action.joint_velocities is not None:
-                action.joint_velocities = np.clip(action.joint_velocities, self.velocity_limits["min"], self.velocity_limits["max"])
+                action.joint_velocities = np.clip(
+                    action.joint_velocities,
+                    self.velocity_limits["min"],
+                    self.velocity_limits["max"],
+                )
 
             elif action.joint_torques is not None:
-                action.joint_torques = np.clip(action.joint_torques, self.torque_limits["min"], self.torque_limits["max"])
+                action.joint_torques = np.clip(
+                    action.joint_torques,
+                    self.torque_limits["min"],
+                    self.torque_limits["max"],
+                )
 
         return True
