@@ -9,7 +9,7 @@ import argparse
 import time
 import threading
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List
 
 try:
     import meshcat

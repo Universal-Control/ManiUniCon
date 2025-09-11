@@ -7,7 +7,6 @@ import numpy as np
 import pyzed.sl as sl
 from threadpoolctl import threadpool_limits
 import cv2
-from numba import njit
 from loop_rate_limiters import RateLimiter
 
 from maniunicon.core.sensor import BaseSensor
@@ -20,7 +19,6 @@ from maniunicon.utils.timestamp_accumulator import (
     get_accumulate_timestamp_idxs,
     TimestampAlignedBuffer,
 )
-from maniunicon.utils.pcd_utils import filter_vectors, transform_points
 
 
 class SingleZedCamera(mp.Process):

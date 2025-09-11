@@ -60,9 +60,11 @@ class FRANKAInterface(RobotInterface):
             # Connect to UR5 robot
             self.robot = Robot(self.ip)
             self.robot.recover_from_errors()
-            self.robot.relative_dynamics_factor = RelativeDynamicsFactor(
-                velocity=0.8, acceleration=0.3, jerk=0.1
-            )
+            self.robot.relative_dynamics_factor = 0.2
+            # self.robot.relative_dynamics_factor = RelativeDynamicsFactor(
+            #     velocity=0.2, acceleration=0.27, jerk=0.1
+            #     # velocity=0.7, acceleration=0.27, jerk=0.1
+            # )
 
             try:
                 self.gripper = Gripper(self.ip)
@@ -205,9 +207,6 @@ class FRANKAInterface(RobotInterface):
                 self._first_action_arrived = True
                 self._first_time_get_action = time.time()
         else:
-            # print(
-            #     f"Time since last get action: {(time.time() - self._last_time_get_action) * 1000} ms"
-            # )
             self._last_time_get_action = time.time()
 
         if not self.is_connected():

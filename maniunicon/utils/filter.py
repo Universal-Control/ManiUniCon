@@ -10,7 +10,6 @@ class LowPassFilter:
         self.y = initial_value
 
     def filter(self, x):
-        return x
         self.y = self.alpha * x + (1 - self.alpha) * self.y
         return self.y
 

@@ -494,6 +494,14 @@ class SharedStorage:
             data = self.camera_buffers[cam_name].get_last_k(k)
         self.tmp_out_single = data
         if data is not None:
+            if data["color"] is None:
+                print(
+                    f"\033[93mWarning: Color data is None for camera {cam_name}\033[0m"
+                )
+            if data["depth"] is None:
+                print(
+                    f"\033[93mWarning: Depth data is None for camera {cam_name}\033[0m"
+                )
             return SingleCameraData(
                 color=data["color"],
                 depth=data["depth"],

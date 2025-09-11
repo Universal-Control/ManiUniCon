@@ -178,14 +178,14 @@ class MultiCameraPointCloudVisualizer:
                 camera_info["width"],
                 camera_info["height"],
                 rs.format.z16,
-                30,
+                15,
             )
             config.enable_stream(
                 rs.stream.color,
                 camera_info["width"],
                 camera_info["height"],
                 rs.format.rgb8,
-                30,
+                15,
             )
 
             # Start camera
@@ -326,9 +326,9 @@ class MultiCameraPointCloudVisualizer:
                 self.update_visualization()
 
             frame_count += 1
-            if frame_count % 30 == 0:
+            if frame_count % 15 == 0:
                 elapsed = time.time() - start_time
-                fps = 30 / elapsed if elapsed > 0 else 0
+                fps = 15 / elapsed if elapsed > 0 else 0
                 print(f"FPS: {fps:.1f}")
                 start_time = time.time()
 

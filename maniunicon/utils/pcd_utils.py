@@ -13,7 +13,7 @@ from typing import Sequence, Tuple, Union, Dict
 from collections import OrderedDict
 import cv2
 
-from maniunicon.utils import math_utils
+from maniunicon.utils import math_utils, PROJECT_ROOT
 
 try:
     import pytorch3d.ops as torch3d_ops
@@ -112,16 +112,14 @@ def hand_save_view_point():
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(pos)
     pcd.colors = o3d.utility.Vector3dVector(color)
-    save_view_point(
-        pcd, "/home/minghuan/ppt_learning/ppt_learning/utils/test/view_point.json"
-    )
+    save_view_point(pcd, f"{PROJECT_ROOT}/view_point.json")
     print("=" * 80)
     print("Done")
 
 
 def capture_pcd(
     obs,
-    view_point="/home/nuc001/minghuan/ppt_learning/ppt_learning/utils/test/view_point.json",
+    view_point=f"{PROJECT_ROOT}/view_point.json",
     output_image="./general_capture",
     tag="general_capture",
     visualize=False,

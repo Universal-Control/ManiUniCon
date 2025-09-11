@@ -9,10 +9,10 @@ from enum import Enum
 
 from segment_anything import sam_model_registry, SamPredictor
 
+from maniunicon.utils import PROJECT_ROOT
 
 SAM_TYPE = "vit_h"
-# SAM_PATH = "/home/bytedance/zhengbang/segment-anything/ckpt/sam_vit_h_4b8939.pth"
-SAM_PATH = "/home/nuc001/zhengbang/segment-anything/ckpt/sam_vit_h_4b8939.pth"
+SAM_PATH = f"{PROJECT_ROOT}/ckpt/sam_vit_h_4b8939.pth"
 
 
 def to_array(x, dtype=float):

@@ -1,4 +1,4 @@
-sensor_frequency: 30
+sensor_frequency: 15
 policy_frequency: 30
 control_frequency: 200
 state_update_frequency: 30
