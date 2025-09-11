@@ -1,0 +1,46 @@
+name: PR Quality
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  quality:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+
+    env:
+      PYTHON_VERSION: "3.10"
+      BLACK_VERSION: "25.1.0"
+      BASE_REF: ${{ github.base_ref }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install black==${BLACK_VERSION}
+
+      - name: Black format check
+        run: |
+          echo "Running black==${BLACK_VERSION}"
+          black --version
+          CHANGED=$(git diff --name-only origin/${BASE_REF}...HEAD | grep -E '\.py$' || true)
+          if [ -z "$CHANGED" ]; then
+            echo "No changed Python files."
+          else
+            echo "$CHANGED" | tr '\n' ' ' | xargs black --check --diff
+          fi
+
+      - name: Run custom checks
+        run: |
+          python .github/scripts/check_repo.py --base-ref "origin/${BASE_REF}"

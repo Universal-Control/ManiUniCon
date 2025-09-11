@@ -1,0 +1,101 @@
+#!/usr/bin/env python3
+import argparse
+import ast
+import re
+import subprocess
+import sys
+import tokenize
+from io import BytesIO
+from pathlib import Path
+
+CHINESE_RE = re.compile(r"[\u4e00-\u9fff]")
+
+HARD_PATH_PATTERNS = [
+    re.compile(r"^/[^/].+"),
+    re.compile(r"^~/.+"),
+    re.compile(r"^[A-Za-z]:\\\\.+"),
+    re.compile(r"^\\\\\\\\[^\\].+"),
+    re.compile(r"^/Users/[^/].+"),
+    re.compile(r"^/home/[^/].+"),
+    re.compile(r"^/mnt/[^/].+"),
+    re.compile(r"^/var/[^/].+"),
+    re.compile(r"^/opt/[^/].+"),
+]
+
+
+def get_changed_py_files(base_ref: str) -> list[Path]:
+    try:
+        cmd = ["git", "diff", "--name-only", f"{base_ref}...HEAD"]
+        out = subprocess.check_output(cmd, text=True).strip().splitlines()
+        return [Path(p) for p in out if p.endswith(".py") and Path(p).exists()]
+    except Exception:
+        return []
+
+
+def list_repo_py_files() -> list[Path]:
+    return [p for p in Path(".").rglob("*.py") if p.is_file()]
+
+
+def is_hardcoded_path(s: str) -> bool:
+    s_stripped = s.strip()
+    for pat in HARD_PATH_PATTERNS:
+        if pat.search(s_stripped.replace("/", "/").replace("\\", "\\")):
+            return True
+    return False
+
+
+def check_file_for_issues(path: Path) -> list[str]:
+    errors = []
+    try:
+        data = path.read_bytes()
+    except Exception as e:
+        errors.append(f"{path}: [READ-ERROR] {e}")
+        return errors
+
+    try:
+        for tok in tokenize.tokenize(BytesIO(data).readline):
+            if tok.type == tokenize.COMMENT and CHINESE_RE.search(tok.string):
+                errors.append(f"{path}:{tok.start[0]}: Chinese characters found in comment.")
+    except tokenize.TokenError:
+        pass
+
+    try:
+        tree = ast.parse(data.decode("utf-8", errors="ignore"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                s = node.value
+                if is_hardcoded_path(s):
+                    lineno = getattr(node, "lineno", "?")
+                    errors.append(f"{path}:{lineno}: Hardcoded absolute path in string: {repr(s)[:120]}")
+    except Exception as e:
+        errors.append(f"{path}: [PARSE-ERROR] {e}")
+
+    return errors
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Repo checks: Chinese comments & hardcoded paths")
+    parser.add_argument("--base-ref", type=str, default="origin/main")
+    args = parser.parse_args()
+
+    files = get_changed_py_files(args.base_ref)
+    if not files:
+        files = list_repo_py_files()
+
+    all_errors: list[str] = []
+    for f in files:
+        all_errors.extend(check_file_for_issues(f))
+
+    if all_errors:
+        print("Found issues:\n")
+        for e in all_errors:
+            print(e)
+        print("\nFail: please remove Chinese comments and hardcoded absolute paths.")
+        sys.exit(1)
+    else:
+        print("No issues found.")
+        sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()
