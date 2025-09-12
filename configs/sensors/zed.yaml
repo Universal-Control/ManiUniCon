@@ -1,0 +1,51 @@
+zed:
+  _target_: maniunicon.sensors.zed.ZedSensor
+  frequency: ${sensor_frequency}
+  verbose: true
+  camera_config:
+    camera_names:
+      camera_0: "auto"  # Use "auto" for automatic detection or specify serial number
+      # camera_1: 12345678  # Example: specific serial number for second camera
+
+    multi_camera_get_max_k: ${get_max_k}
+    multi_camera_get_time_budget: 0.3
+    multi_camera_put_desired_frequency: 30
+
+    camera_0:
+      resolution: "HD720"  # Options: HD2K, HD1080, HD720, VGA
+      fps: 30
+      depth_mode: "ULTRA"  # Options: PERFORMANCE, QUALITY, ULTRA, NEURAL
+      coordinate_units: "METER"  # Options: MILLIMETER, CENTIMETER, METER, INCH, FOOT
+      minimum_distance: 0.2  # Minimum depth distance in meters
+      maximum_distance: 10.0  # Maximum depth distance in meters
+      single_camera_get_max_k: ${get_max_k}
+      single_camera_get_time_budget: 0.2
+      single_camera_put_desired_frequency: ${data.camera_config.multi_camera_put_desired_frequency}
+      transform: none  # to be replaced with actual transform
+      transform_T: none  # to be replaced with actual transform transpose
+      display: false  # Set to true to display camera feed
+      overlay_image: "none"  # Path to overlay image if needed
+      overlay_alpha: 0.3  # Alpha value for overlay blending
+      pose:
+        position: [0.0, 0.0, 0.0]  # Camera position (x, y, z)
+        orientation: [0.0, 0.0, 0.0, 1.0]  # Camera orientation quaternion (x, y, z, w)
+
+    # Uncomment and configure for multi-camera setup
+    # camera_1:
+    #   resolution: "HD720"
+    #   fps: 30
+    #   depth_mode: "ULTRA"
+    #   coordinate_units: "METER"
+    #   minimum_distance: 0.2
+    #   maximum_distance: 10.0
+    #   single_camera_get_max_k: ${get_max_k}
+    #   single_camera_get_time_budget: 0.2
+    #   single_camera_put_desired_frequency: ${data.camera_config.multi_camera_put_desired_frequency}
+    #   transform: none
+    #   transform_T: none
+    #   display: false
+    #   overlay_image: "none"
+    #   overlay_alpha: 0.3
+    #   pose:
+    #     position: [0.5, 0.0, 0.0]
+    #     orientation: [0.0, 0.0, 0.0, 1.0]

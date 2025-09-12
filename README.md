@@ -5,7 +5,7 @@ ManiUniCon is a comprehensive, multi-process robotics control framework designed
 ## 🚀 Features
 
 - **Modular Design**: Plug-and-play architecture for seamless integration of new robot arms and algorithms
-- **Multi-Robot Support**: Compatible with UR5, XArm6, and easily extensible to other robotic arms
+- **Multi-Robot Support**: Compatible with UR5, XArm6, Franka FR3/Panda, and easily extensible to other robotic arms
 - **One-Click Switching**: Effortlessly transition between data collection and policy deployment modes
 - **Real-time Control**: High-frequency control loops with shared memory architecture
 - **Algorithm Agnostic**: Easy integration of new learning algorithms through standardized interfaces
@@ -13,12 +13,6 @@ ManiUniCon is a comprehensive, multi-process robotics control framework designed
 - **Visualization**: 3D visualization support with Meshcat
 - **Flexible Configuration**: Hydra-based configuration management for quick experiment setup
 - **Safety Features**: Emergency stop, error handling, and reset functionality
-
-## 🏗️ Architecture
-
-ManiUniCon uses a multi-process architecture with shared memory for efficient real-time communication:
-
-![Framework Architecture](medias/framework.png)
 
 ## 🔧 Supported Hardware
 
@@ -39,13 +33,23 @@ ManiUniCon uses a multi-process architecture with shared memory for efficient re
     <img src="medias/xarm_keyboard_clip.gif" width="20%"/>
   </p>
 
+- **FR3**: FRANKA RESEARCH 3 robot with [franky-control](https://github.com/TimSchneider42/franky)
+- **FRPanda**: Franka Emika Panda robot with [deoxys_control](https://github.com/UT-Austin-RPL/deoxys_control/tree/main/deoxys/franka-interface) (Note: Panda is no longer supported and does not work with latest libfranka)
+
 ### Sensors
 - **RealSense Cameras**: Intel RealSense depth cameras
+- **Zed Cameras** [WIP, not tested]: Zed series depth cameras
 
 ### Teleoperation Devices
 - **Meta Quest Controllers**: Meta Quest VR controllers for intuitive 6-DOF manipulation
 - **SpaceMouse**: 3Dconnexion SpaceMouse for precise position and orientation control
 - **Keyboard**: Basic keyboard control for simple teleoperation tasks
+
+## 🏗️ Architecture
+
+ManiUniCon uses a multi-process architecture with shared memory for efficient real-time communication:
+
+![Framework Architecture](medias/framework.png)
 
 ## 📦 Installation
 
@@ -87,10 +91,13 @@ For **XArm6** robot:
 pip install -e '.[xarm]'
 ```
 
-For **FRANKA** robot with [franky-control](https://github.com/TimSchneider42/franky) library:
+For **FR3** robot with [franky-control](https://github.com/TimSchneider42/franky):
 ```bash
 pip install -e '.[franky_fr3_franky]'
 ```
+
+For **FRPanda** robot with [deoxys_control](https://github.com/UT-Austin-RPL/deoxys_control/tree/main/deoxys/franka-interface):
+- Follow the installation guidance of [deoxys_control](https://github.com/UT-Austin-RPL/deoxys_control/tree/main/deoxys/franka-interface) on the server and the client side.
 
 For **RealSense** cameras:
 ```bash
@@ -332,7 +339,7 @@ If you use ManiUniCon in your research, please cite:
 ```bibtex
 @software{maniunicon2025,
   title={ManiUniCon: A Unified Control Interface for Robotic Manipulation},
-  author={Zhengbang Zhu and Minghuan Liu},
+  author={Zhu, Zhengbang and Liu, Minghuan and Han, Xiaoshen},
   year={2025},
   url={https://github.com/Universal-Control/ManiUniCon}
 }

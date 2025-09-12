@@ -1,15 +1,22 @@
 """Policy implementations for robot control."""
 
-from .torch_model import TorchModelPolicy
-from .spacemouse import SpaceMousePolicy
-from .keyboard import KeyboardPolicy
-from .quest import QuestPolicy
-from .gello import GelloPolicy
+import importlib
+import warnings
 
-__all__ = [
-    "TorchModelPolicy",
-    "SpaceMousePolicy",
-    "KeyboardPolicy",
-    "QuestPolicy",
-    "GelloPolicy",
-]
+_POLICIES = {
+    "TorchModelPolicy": "torch_model",
+    "SpaceMousePolicy": "spacemouse",
+    "KeyboardPolicy": "keyboard",
+    "QuestPolicy": "quest",
+    "GelloPolicy": "gello",
+}
+
+__all__ = []
+
+for policy_name, module_name in _POLICIES.items():
+    try:
+        module = importlib.import_module(f".{module_name}", package=__name__)
+        globals()[policy_name] = getattr(module, policy_name)
+        __all__.append(policy_name)
+    except (ImportError, AttributeError) as e:
+        warnings.warn(f"Failed to import {policy_name}: {e}")

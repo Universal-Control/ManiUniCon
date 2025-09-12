@@ -1,3 +1,4 @@
+from numba import njit
 import numpy as np
 import open3d as o3d
 import trimesh
@@ -12,7 +13,7 @@ from typing import Sequence, Tuple, Union, Dict
 from collections import OrderedDict
 import cv2
 
-from maniunicon.utils import math_utils
+from maniunicon.utils import math_utils, PROJECT_ROOT
 
 try:
     import pytorch3d.ops as torch3d_ops
@@ -25,6 +26,22 @@ except:
     print("openpoints not installed")
 
 BOUND = [0.2, 1.03, -1.2, 1.2, -0.3, 0.7]
+
+
+@njit
+def filter_vectors(v, rgb):
+    norms = np.sqrt((v**2).sum(axis=1))
+    valid = norms > 0
+    points = v[valid]
+    colors = rgb[valid]
+    return points, colors
+
+
+@njit
+def transform_points(points, transform, transform_T):
+    points = points @ transform_T
+    points += transform
+    return points
 
 
 def save_view_point(pcd, filename):
@@ -95,16 +112,14 @@ def hand_save_view_point():
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(pos)
     pcd.colors = o3d.utility.Vector3dVector(color)
-    save_view_point(
-        pcd, "/home/minghuan/ppt_learning/ppt_learning/utils/test/view_point.json"
-    )
+    save_view_point(pcd, f"{PROJECT_ROOT}/view_point.json")
     print("=" * 80)
     print("Done")
 
 
 def capture_pcd(
     obs,
-    view_point="/home/nuc001/minghuan/ppt_learning/ppt_learning/utils/test/view_point.json",
+    view_point=f"{PROJECT_ROOT}/view_point.json",
     output_image="./general_capture",
     tag="general_capture",
     visualize=False,
@@ -986,7 +1001,7 @@ def uniform_sampling_torch(points, npoints=1200):
     if batch_mode:
         return sampled_indices
     else:
-        return sampled_indices[0]  
+        return sampled_indices[0]
 
 
 def pcd_filter_bound_torch(pc, bound):

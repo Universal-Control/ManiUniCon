@@ -7,7 +7,6 @@ import numpy as np
 import pyrealsense2 as rs
 from threadpoolctl import threadpool_limits
 import cv2
-from numba import njit
 from loop_rate_limiters import RateLimiter
 
 from maniunicon.core.sensor import BaseSensor
@@ -20,22 +19,6 @@ from maniunicon.utils.timestamp_accumulator import (
     get_accumulate_timestamp_idxs,
     TimestampAlignedBuffer,
 )
-
-
-@njit
-def filter_vectors(v, rgb):
-    norms = np.sqrt((v**2).sum(axis=1))
-    valid = norms > 0
-    points = v[valid]
-    colors = rgb[valid]
-    return points, colors
-
-
-@njit
-def transform_points(points, transform, transform_T):
-    points = points @ transform_T
-    points += transform
-    return points
 
 
 def get_color_from_tex_coords(tex_coords, color_image):
@@ -353,7 +336,7 @@ class RealSenseSensor(BaseSensor):
             camera_process.start(wait=False)
 
             # Small delay between camera starts to avoid conflicts
-            time.sleep(0.5)
+            time.sleep(1)
 
         # Wait for all cameras to be ready
         if self.verbose:

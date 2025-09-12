@@ -1,11 +1,13 @@
 """Gello-based teleoperation policy for robot control."""
 
+import os
 import time
 from typing import Optional
 import numpy as np
 from multiprocessing.synchronize import Event
 import traceback
 from loop_rate_limiters import RateLimiter
+import pynput
 
 from gello.agents.gello_agent import GelloAgent
 
@@ -15,6 +17,8 @@ from maniunicon.utils.shared_memory.shared_storage import (
     RobotState,
 )
 from maniunicon.core.policy import BasePolicy
+from maniunicon.utils.data import get_next_episode_dir
+from maniunicon.utils.filter import JointSpaceSmoother, AdaptiveButterworth
 
 
 class GelloPolicy(BasePolicy):
@@ -32,10 +36,10 @@ class GelloPolicy(BasePolicy):
         command_latency: float = 0.01,  # seconds
         device_path: str = "/dev/ttyUSB0",
         dt: float = 0.01,  # Time step between actions
-        control_interval: int = 1,  # Number of action steps to send
         joint_limits: Optional[dict] = None,  # {"min": [...], "max": [...]}
         joint_velocity_limit: float = 10,  # rad/s max velocity
         synchronized: bool = False,
+        record_dir: Optional[str] = None,
         warn_on_late: bool = True,
         name: str = "GelloPolicy",
     ):
@@ -49,18 +53,46 @@ class GelloPolicy(BasePolicy):
         self.device_path = device_path
         self.dt = dt
         self.frequency = 1 / dt
-        self.control_interval = control_interval
         self.joint_limits = joint_limits
         self.joint_velocity_limit = joint_velocity_limit
         self.synchronized = synchronized
         self.warn_on_late = warn_on_late
-
+        self.record_dir = record_dir
         # Internal state
         self.agent = None
         self._current_joint_positions = None
         self._prev_joint_positions = None
         self._gripper_state = np.array([0.0])  # 0 for open, 1 for closed
         self._should_disconnect = False
+        self._recording_active = False
+        self._current_episode_dir: Optional[str] = None
+
+    def _on_press(self, key):
+        """Handle key press events."""
+        try:
+            if key == pynput.keyboard.KeyCode.from_char("r"):
+                self._recording_active = not self._recording_active
+                print(f"Recording: {'ON' if self._recording_active else 'OFF'}")
+            elif (
+                key == pynput.keyboard.KeyCode.from_char("d") and self._recording_active
+            ):
+                self._recording_active = False
+                self.shared_storage.clear_record_dir()
+                if self._current_episode_dir and os.path.exists(
+                    self._current_episode_dir
+                ):
+                    import shutil
+
+                    shutil.rmtree(self._current_episode_dir)
+                    print(
+                        f"Dropped episode - Removed directory: {self._current_episode_dir}"
+                    )
+                self._current_episode_dir = None
+                self.shared_storage.stop_record()
+                self._recording_active = False
+                print("Recording: OFF")
+        except AttributeError:
+            pass
 
     def _clip_joint_positions(
         self, target_positions: np.ndarray, current_positions: np.ndarray
@@ -102,6 +134,9 @@ class GelloPolicy(BasePolicy):
                 port=self.device_path,
             )
 
+            self._listener = pynput.keyboard.Listener(on_press=self._on_press)
+            self._listener.start()
+
             print(
                 f"Gello controller connected successfully (controlling {self.num_joints} joints)"
             )
@@ -114,6 +149,19 @@ class GelloPolicy(BasePolicy):
                 frequency=self.frequency,
                 warn=self.warn_on_late,
                 name="gello_policy",
+            )
+
+            smoother = JointSpaceSmoother(
+                num_joints=self.num_joints,
+                alpha_ewma=0.3,
+                window_size=5,
+                velocity_limit=np.array([10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0]),
+                acceleration_limit=np.array([10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0]),
+                deadband_threshold=0.001,
+                adaptive_alpha=True,
+            )
+            butterworth = AdaptiveButterworth(
+                num_joints=self.num_joints, cutoff_freq=10.0, sample_rate=self.frequency
             )
 
             while self.shared_storage.is_running.value and not self._should_disconnect:
@@ -167,23 +215,73 @@ class GelloPolicy(BasePolicy):
                         target_joint_positions, self._current_joint_positions
                     )
 
+                    # Create and send robot actions
+                    current_time = time.time()
+
+                    # Apply safety clipping
+                    clipped_joint_positions = self._clip_joint_positions(
+                        target_joint_positions, self._current_joint_positions
+                    )
+
+                    # Apply smoothing
+                    clipped_joint_positions = smoother.smooth(
+                        clipped_joint_positions, timestamp=current_time
+                    )
+                    clipped_joint_positions = butterworth.filter(
+                        clipped_joint_positions
+                    )
+
                     # Update current positions for next iteration
                     self._current_joint_positions = clipped_joint_positions.copy()
 
-                    # Create and send robot actions
-                    current_time = time.time()
-                    for i in range(self.control_interval):
-                        action = RobotAction(
-                            joint_positions=clipped_joint_positions,
-                            gripper_state=self._gripper_state,
-                            control_mode="joint",
-                            timestamp=current_time,
-                            target_timestamp=current_time
-                            + (i + 4) * self.dt
-                            - self.command_latency,
-                        )
+                    action = RobotAction(
+                        joint_positions=clipped_joint_positions,
+                        gripper_state=self._gripper_state,
+                        control_mode="joint",
+                        timestamp=current_time,
+                        target_timestamp=current_time
+                        + 2 * self.dt
+                        - self.command_latency,
+                    )
 
-                        self.shared_storage.write_action(action)
+                    self.shared_storage.write_action(action)
+
+                    if (
+                        self._recording_active
+                        and not self.shared_storage.is_recording.value
+                    ):
+                        if self.record_dir is not None:
+                            self._current_episode_dir = get_next_episode_dir(
+                                self.record_dir
+                            )
+                            self.shared_storage.set_record_dir(
+                                self._current_episode_dir
+                            )
+                            self.shared_storage.start_record(
+                                start_time=time.time(),
+                                dt=self.dt,
+                            )
+                            print(
+                                f"Recording started - Episode: {os.path.basename(self._current_episode_dir)}"
+                            )
+                        else:
+                            print(
+                                "Recording directory not specified. Cannot start recording."
+                            )
+                            self._recording_active = False
+                    elif (
+                        not self._recording_active
+                        and self.shared_storage.is_recording.value
+                    ):
+                        self.shared_storage.stop_record()
+                        if self._current_episode_dir:
+                            print(
+                                f"Recording stopped - Episode saved to: {self._current_episode_dir}"
+                            )
+                        else:
+                            print("Recording stopped")
+                        self._current_episode_dir = None
+                        self._recording_active = False
 
                     if self.synchronized and (
                         self.reset_event is None or not self.reset_event.is_set()

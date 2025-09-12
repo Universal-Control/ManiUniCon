@@ -336,8 +336,12 @@ class Robot(mp.Process):
                         )
                 else:
                     if len(executing_actions) > 0:
+                        while (
+                            executing_actions[0].target_timestamp < t_now
+                            and len(executing_actions) > 1
+                        ):
+                            executing_actions = executing_actions[1:]
                         action = executing_actions[0]
-                        executing_actions = executing_actions[1:]
                     else:
                         action = None
 
