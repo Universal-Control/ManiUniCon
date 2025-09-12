@@ -71,6 +71,7 @@ def check_file_for_issues(path: Path) -> list[str]:
         errors.append(f"{path}: [READ-ERROR] {e}")
         return errors
 
+    # 1) Token-level checks (e.g., Chinese characters in comments)
     try:
         for tok in tokenize.tokenize(BytesIO(data).readline):
             if tok.type == tokenize.COMMENT and CHINESE_RE.search(tok.string):
@@ -78,14 +79,33 @@ def check_file_for_issues(path: Path) -> list[str]:
     except tokenize.TokenError:
         pass
 
+    # 2) AST-level checks for hardcoded absolute paths
     try:
         tree = ast.parse(data.decode("utf-8", errors="ignore"))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Constant) and isinstance(node.value, str):
-                s = node.value
-                if is_hardcoded_path(s):
-                    lineno = getattr(node, "lineno", "?")
-                    errors.append(f"{path}:{lineno}: Hardcoded absolute path in string: {repr(s)[:120]}")
+
+        class PathCheckVisitor(ast.NodeVisitor):
+            def __init__(self):
+                self.in_fstring_stack: list[bool] = []
+
+            def visit_JoinedStr(self, node: ast.JoinedStr):
+                # Mark that we are inside an f-string; constants inside will be ignored.
+                self.in_fstring_stack.append(True)
+                self.generic_visit(node)
+                self.in_fstring_stack.pop()
+
+            def visit_Constant(self, node: ast.Constant):
+                if isinstance(node.value, str):
+                    s = node.value
+                    in_fstring = any(self.in_fstring_stack)
+                    # If this string literal is part of an f-string, skip it.
+                    # This prevents false positives like f"{PROJECT_ROOT}/view_point.json".
+                    if not in_fstring and is_hardcoded_path(s):
+                        lineno = getattr(node, "lineno", "?")
+                        errors.append(
+                            f"{path}:{lineno}: Hardcoded absolute path in string: {repr(s)[:120]}"
+                        )
+
+        PathCheckVisitor().visit(tree)
     except Exception as e:
         errors.append(f"{path}: [PARSE-ERROR] {e}")
 
