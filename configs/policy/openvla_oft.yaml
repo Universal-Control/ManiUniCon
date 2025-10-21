@@ -1,0 +1,55 @@
+_target_: maniunicon.policies.torch_model_vla.VLAPolicy
+
+frame_latency: ${eval:'1 / 30'}
+infer_latency: ${eval:'1 / 20'}
+steps_per_inference: 3 # expected openloop steps
+use_real_time_chunking: false
+enable_recording: false
+record_dir: null # path to recorded files
+device: ${device}
+synchronized: ${synchronized}
+
+model:
+  _target_: maniunicon.customize.policy_model.openvla_model.OpenVLAModel
+  saved_model_path: null # path to openvla-oft ckpt
+
+  device: ${device}
+  unnorm_key: "pick_up_anything_rlds/1.0.0" # choose the one that matching the task training dataset
+  
+  # Action configuration
+  use_act_chunk: true  # Use action chunking (set to false for action ensemble)
+  action_ensemble_temp: -0.8  # Temperature for action ensemble (negative values give more weight to older predictions)
+  
+  # Model configuration
+  use_l1_regression: true  # Use L1 regression action head for continuous actions
+  use_diffusion: false  # Use diffusion action head (alternative to L1)
+  num_diffusion_steps_inference: 50  # Number of diffusion steps for inference (if use_diffusion=true)
+  
+  # Input configuration
+  use_proprio: false  # Use proprioception input
+  center_crop: true  # Apply center cropping to images
+  num_images_in_input: 1  # Number of camera views (1 for single camera, >1 for multi-camera)
+  
+  # Fine-tuning configuration
+  lora_rank: 32  # LoRA rank for fine-tuning
+  
+  # Quantization options (for memory efficiency)
+  load_in_8bit: false  # Load model with 8-bit quantization
+  load_in_4bit: false  # Load model with 4-bit quantization
+  
+  # Task specification
+  task_name: "pick up anything"  # Task instruction for the VLA model
+
+obs_wrapper:
+  _target_: maniunicon.customize.obs_wrapper.spatialvla_rgb_wrapper.SpatialVLAImageWrapper
+  camera_config: ${data.camera_config}
+  state_keys: ["tcp_position", "tcp_orientation", "joint_positions", "joint_velocities", "gripper_state"]
+  num_cams: 1  # Set to 1 for single camera, 2+ for multi-camera setup
+  observation_horizon: 1  # Should match the window size in VLA model
+
+act_wrapper:
+  _target_: maniunicon.customize.act_wrapper.spatialvla_eepose_wrapper.SpatialVLAEEPoseWrapper
+  hist_action: 0  # Number of historical actions to consider
+  action_horizon: 5  # Should match NUM_ACTIONS_CHUNK for the robot platform (8 for LIBERO, 25 for ALOHA, 5 for Bridge, 5 for xarm sft)
+  control_mode: cartesian
+  dt: ${policy.dt}
