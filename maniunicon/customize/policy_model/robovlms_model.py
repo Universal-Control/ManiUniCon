@@ -1,5 +1,6 @@
 import json
 import os.path
+import shutil
 from copy import deepcopy
 import torch
 from PIL import Image
@@ -66,11 +67,15 @@ class RoboVlmsModel:
             import transformers
 
             package_dir = transformers.__path__[0]
-            os.system(
-                "cp <PATH-TO-UR-ROBOVLMS-FOLDER>/tools/modeling_kosmos2.py {}/models/kosmos2/modeling_kosmos2.py".format(
-                    package_dir
+            robovlms_root = os.environ.get("ROBOVLMS_ROOT")
+            if not robovlms_root:
+                raise EnvironmentError(
+                    "ROBOVLMS_ROOT environment variable must be set to the RoboVLMs installation directory."
                 )
-            )
+            source_model_path = os.path.join(robovlms_root, "tools", "modeling_kosmos2.py")
+            target_model_path = os.path.join(package_dir, "models", "kosmos2", "modeling_kosmos2.py")
+            # Copy the custom kosmos model implementation into the transformers package when needed.
+            shutil.copy(source_model_path, target_model_path)
 
         if not self.debug:
             ckpt = torch.load(ckpt_path, map_location="cpu")

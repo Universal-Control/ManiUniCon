@@ -23,9 +23,6 @@ def resize_image_sequence(images, target_size, interp=cv2.INTER_AREA):
     N, H, W, C = images.shape
     new_H, new_W = target_size
 
-    # Reshape to 2D array of images for faster processing
-    reshaped = images.reshape(-1, H, W, C)
-
     # Preallocate output array
     output = np.empty((N, new_H, new_W, C), dtype=images.dtype)
 
