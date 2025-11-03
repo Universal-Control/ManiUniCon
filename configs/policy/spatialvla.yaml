@@ -1,0 +1,33 @@
+_target_: maniunicon.policies.torch_model_vla.VLAPolicy
+
+frame_latency: ${eval:'1 / 30'}
+infer_latency: ${eval:'1 / 20'}
+steps_per_inference: 3 # expected openloop steps
+use_real_time_chunking: false
+enable_recording: false
+record_dir: null # path to recorded files
+device: ${device}
+synchronized: ${synchronized}
+
+model:
+  _target_: maniunicon.customize.policy_model.spatialvla_model.SpatialVLAModel
+  saved_model_path: null # path to spatialvla ckpt
+  device: ${device}
+  unnorm_key: "pick_up_anything_rlds/1.0.0" # choose the one that matching the task training dataset
+  use_act_chunk: true # set to true to use action chunking, else action ensemble
+  action_ensemble_temp: -0.8
+  task_name: "pick up anything" # task instruction that input to vla model
+
+obs_wrapper:
+  _target_: maniunicon.customize.obs_wrapper.spatialvla_rgb_wrapper.SpatialVLAImageWrapper
+  camera_config: ${data.camera_config}
+  state_keys: ["tcp_position", "tcp_orientation", "joint_positions", "joint_velocities", "gripper_state"]
+  num_cams: 2
+  observation_horizon: 1 # should be the same as the window size in vla model
+
+act_wrapper:
+  _target_: maniunicon.customize.act_wrapper.spatialvla_eepose_wrapper.SpatialVLAEEPoseWrapper
+  hist_action: 0  # number of historical actions to consider
+  action_horizon: 5 # should be the same as the action chunk size in vla model
+  control_mode: cartesian
+  dt: ${policy.dt}
