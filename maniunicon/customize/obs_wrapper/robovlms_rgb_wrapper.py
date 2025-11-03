@@ -28,9 +28,7 @@ def resize_image_sequence(images, target_size, interp=cv2.INTER_AREA):
 
     # Resize each image
     for i in range(N):
-        res = cv2.resize(
-            images[i], (new_W, new_H), interpolation=interp
-        )
+        res = cv2.resize(images[i], (new_W, new_H), interpolation=interp)
         if C == 1:
             output[i] = res[:, :, np.newaxis]
         else:

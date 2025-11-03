@@ -56,12 +56,18 @@ class RoboVlmsEEPoseWrapper:
         raw_actions = actions.copy()
         if actions.ndim == 4:
             # action: (bs, ws, fwd, action_dim) remove the batch dimension and history actions
-            actions = actions[0, 0, self.hist_action : self.hist_action + self.action_horizon, :]
+            actions = actions[
+                0, 0, self.hist_action : self.hist_action + self.action_horizon, :
+            ]
         elif actions.ndim == 2:
             # action: (fwd, action_dim)
-            actions = actions[self.hist_action : self.hist_action + self.action_horizon, :]
+            actions = actions[
+                self.hist_action : self.hist_action + self.action_horizon, :
+            ]
         else:
-            raise ValueError(f"Unsupported action shape: {actions.shape}. Expected 2D or 4D array.")
+            raise ValueError(
+                f"Unsupported action shape: {actions.shape}. Expected 2D or 4D array."
+            )
 
         print(np.sum(is_new), " new actions, ", len(actions), " total actions")
         if np.sum(is_new) == 0:

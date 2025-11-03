@@ -27,26 +27,26 @@ def resize_image_sequence(images, target_size, resample=Image.BICUBIC):
     if isinstance(target_size, int):
         target_size = (target_size, target_size)
     new_H, new_W = target_size
-    
+
     N, H, W, C = images.shape
-    
+
     # Preallocate output array (always 3 channels for RGB)
     output = np.empty((N, new_H, new_W, 3), dtype=np.uint8)
-    
+
     # Resize each image using PIL
     for i in range(N):
         # Convert numpy array to PIL Image
         img_pil = Image.fromarray(images[i])
-        
+
         # Convert to RGB (regardless of original number of channels)
         img_pil = img_pil.convert("RGB")
-        
+
         # Resize image
         img_resized = img_pil.resize((new_W, new_H), resample=resample)
-        
+
         # Convert back to numpy array and store in output
         output[i] = np.array(img_resized)
-    
+
     return output
 
 

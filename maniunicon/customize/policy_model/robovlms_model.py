@@ -24,6 +24,7 @@ from robovlms.model.policy_head.action_tokenizer import ActionTokenizer
 
 fwd_decay_ratio = 1
 
+
 class RoboVlmsModel:
     # model option
     def __init__(
@@ -35,30 +36,42 @@ class RoboVlmsModel:
         raw_calvin=True,
         debug=False,
         use_act_chunk=False,
-        task_name=None
-    ):  
+        task_name=None,
+    ):
         # setup the task instruction that input to vla model
         self.task_name = task_name
         # Loading robovlms model configs
         assert config_path != None
         configs = load_config(config_path)
         self.model = BaseTrainer(configs=configs)
-        
+
         # Get checkpoint path
         print("ckpt_path", ckpt_path)
-        from robovlms.utils.zero_to_fp32 import convert_zero_checkpoint_to_fp32_state_dict
+        from robovlms.utils.zero_to_fp32 import (
+            convert_zero_checkpoint_to_fp32_state_dict,
+        )
+
         # Handle DeepSpeed ckpt
         if os.path.isdir(ckpt_path):
             target_ckpt_path = ckpt_path.replace(".ckpt", ".pt")
             print(f"converting {ckpt_path} to {target_ckpt_path}")
             convert_zero_checkpoint_to_fp32_state_dict(ckpt_path, target_ckpt_path)
             ckpt_path = target_ckpt_path
-        
-        self.init_config(ckpt_path, configs, device, log_save_dir, raw_calvin, debug, use_act_chunk)
+
+        self.init_config(
+            ckpt_path, configs, device, log_save_dir, raw_calvin, debug, use_act_chunk
+        )
         # self.model.model.lm_head.window_size = 1
 
     def init_config(
-        self, ckpt_path, configs, device, save_dir=None, raw_calvin=False, debug=False, use_act_chunk=False
+        self,
+        ckpt_path,
+        configs,
+        device,
+        save_dir=None,
+        raw_calvin=False,
+        debug=False,
+        use_act_chunk=False,
     ):
         ### load and convert checkpoint
         self.debug = debug
@@ -72,8 +85,12 @@ class RoboVlmsModel:
                 raise EnvironmentError(
                     "ROBOVLMS_ROOT environment variable must be set to the RoboVLMs installation directory."
                 )
-            source_model_path = os.path.join(robovlms_root, "tools", "modeling_kosmos2.py")
-            target_model_path = os.path.join(package_dir, "models", "kosmos2", "modeling_kosmos2.py")
+            source_model_path = os.path.join(
+                robovlms_root, "tools", "modeling_kosmos2.py"
+            )
+            target_model_path = os.path.join(
+                package_dir, "models", "kosmos2", "modeling_kosmos2.py"
+            )
             # Copy the custom kosmos model implementation into the transformers package when needed.
             shutil.copy(source_model_path, target_model_path)
 
@@ -257,12 +274,14 @@ class RoboVlmsModel:
         return queue_list, pad_mask
 
     def preprocess(self, obs, lang, mode="continuous"):
-        obs["image"]["camera_0"] = obs["image"]["camera_0"].squeeze().cpu().detach() # (224, 224, 3)
+        obs["image"]["camera_0"] = (
+            obs["image"]["camera_0"].squeeze().cpu().detach()
+        )  # (224, 224, 3)
         obs["image"]["camera_1"] = obs["image"]["camera_1"].squeeze().cpu().detach()
         # preprocess static cam image
         image = obs["image"]["camera_1"].numpy()
         image = Image.fromarray(image)
-        image_x = self.image_preprocess([image]).unsqueeze(0) # (1, 1, 3, 224, 224)
+        image_x = self.image_preprocess([image]).unsqueeze(0)  # (1, 1, 3, 224, 224)
 
         gripper_x = None
         if "camera_0" in obs["image"]:
@@ -363,7 +382,9 @@ class RoboVlmsModel:
         """
         """Step function."""
         input_dict = dict()
-        image_x, gripper_x, text_x, mask = self.preprocess(obs, self.task_name, self.action_space)
+        image_x, gripper_x, text_x, mask = self.preprocess(
+            obs, self.task_name, self.action_space
+        )
 
         input_dict["rgb"] = image_x
         input_dict["hand_rgb"] = gripper_x
@@ -379,14 +400,14 @@ class RoboVlmsModel:
             action = self.policy.inference_step(input_dict)["action"]
         # print("original action from model: ", action)
         print("**** RoboVLMs inference time: ", time.time() - start)
-        
+
         if self.action_space != "discrete":
             if action[0].ndim == action[1].ndim + 1:
                 action = (action[0], action[1].unsqueeze(2))
             action = torch.cat(
                 [action[0], (torch.nn.functional.sigmoid(action[1]) > 0.5).float()],
                 dim=-1,
-            ) 
+            )
 
         if isinstance(action, tuple):
             action = torch.cat([action[0], action[1]], dim=-1)
@@ -417,8 +438,10 @@ class RoboVlmsModel:
             action = self.ensemble_action(action)
 
         if isinstance(action, torch.Tensor):
-            action = action.squeeze() # (fwd, 7) for action chunk, (7,) for ensembled action
-            if not self.use_act_chunk:           
+            action = (
+                action.squeeze()
+            )  # (fwd, 7) for action chunk, (7,) for ensembled action
+            if not self.use_act_chunk:
                 action = action.unsqueeze(0)
 
         if self.configs.get("use_mu_law", False):
@@ -435,13 +458,18 @@ class RoboVlmsModel:
             if isinstance(action, tuple):
                 action = (
                     unnoramalize_action_perdim(
-                        action[0], np.array(self.configs["norm_min"]), np.array(self.configs["norm_max"])
+                        action[0],
+                        np.array(self.configs["norm_min"]),
+                        np.array(self.configs["norm_max"]),
                     ),
                     action[1],
                 )
             else:
                 action = unnoramalize_action_perdim(
-                    action, np.array(self.configs["norm_min"]), np.array(self.configs["norm_max"]), maintain_last=True
+                    action,
+                    np.array(self.configs["norm_min"]),
+                    np.array(self.configs["norm_max"]),
+                    maintain_last=True,
                 )
 
         self.rollout_step_counter += 1
@@ -450,8 +478,15 @@ class RoboVlmsModel:
 
         # convert rot from euler to quat
         from maniunicon.utils.vla_utils import euler_pose_to_quat
+
         N, A = action.shape
-        action = np.concatenate([euler_pose_to_quat(action[..., :-1].reshape(-1, A-1)).reshape(N, -1), action[..., -1:]], axis=-1)
+        action = np.concatenate(
+            [
+                euler_pose_to_quat(action[..., :-1].reshape(-1, A - 1)).reshape(N, -1),
+                action[..., -1:],
+            ],
+            axis=-1,
+        )
         print(f"step {self.rollout_step_counter} action {action}")
-        
+
         return action

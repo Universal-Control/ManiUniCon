@@ -312,6 +312,7 @@ class OpenVLAModel:
         # OpenVLA outputs: [x, y, z, rx, ry, rz, gripper]
         # Need to convert to: [x, y, z, qx, qy, qz, qw, gripper]
         from maniunicon.utils.vla_utils import euler_pose_to_quat
+
         N, A = raw_actions.shape
         if A == 7:  # Euler format
             raw_actions = np.concatenate(

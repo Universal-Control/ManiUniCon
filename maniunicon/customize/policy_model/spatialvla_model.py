@@ -25,7 +25,12 @@ class ActionEnsembler:
             curr_act_preds = np.stack(self.action_history)
         else:
             curr_act_preds = np.stack(
-                [pred_actions[i] for (i, pred_actions) in zip(range(num_actions - 1, -1, -1), self.action_history)]
+                [
+                    pred_actions[i]
+                    for (i, pred_actions) in zip(
+                        range(num_actions - 1, -1, -1), self.action_history
+                    )
+                ]
             )
         # if temp > 0, more recent predictions get exponentially *less* weight than older predictions
         weights = np.exp(-self.action_ensemble_temp * np.arange(num_actions))
@@ -34,7 +39,7 @@ class ActionEnsembler:
         cur_action = np.sum(weights[:, None] * curr_act_preds, axis=0)
 
         return cur_action
-    
+
 
 class SpatialVLAModel:
     def __init__(
@@ -45,7 +50,7 @@ class SpatialVLAModel:
         image_size: list[int] = [224, 224],
         action_ensemble_temp: float = -0.8,
         use_act_chunk: bool = False,
-        task_name: str = None
+        task_name: str = None,
     ) -> None:
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
         self.device = device
@@ -53,22 +58,21 @@ class SpatialVLAModel:
         print(f"*** unnorm_key: {unnorm_key} ***")
         # setup the task instruction that input to vla model
         self.task_name = task_name
-        
+
         self.processor = AutoProcessor.from_pretrained(
             saved_model_path, trust_remote_code=True
         )
-        self.vla = (
-            AutoModel.from_pretrained(
-                saved_model_path,
-                torch_dtype=torch.bfloat16,
-                trust_remote_code=True,
-            )
-            .eval()
-        )
+        self.vla = AutoModel.from_pretrained(
+            saved_model_path,
+            torch_dtype=torch.bfloat16,
+            trust_remote_code=True,
+        ).eval()
         self.vla.to(self.device)
 
         self.image_size = image_size
-        self.obs_horizon = (self.processor.num_obs_steps - 1) * self.processor.obs_delta + 1
+        self.obs_horizon = (
+            self.processor.num_obs_steps - 1
+        ) * self.processor.obs_delta + 1
         self.obs_interval = self.processor.obs_delta
         self.pred_action_horizon = self.processor.action_chunk_size
         self.image_history = deque(maxlen=self.obs_horizon)
@@ -92,9 +96,9 @@ class SpatialVLAModel:
             )
         else:
             self.action_ensembler = None
-            
+
         self.rollout_step_counter = 0
-            
+
     def reset(self) -> None:
         print("reset model now!!!!!!!!")
         self.image_history.clear()
@@ -104,19 +108,19 @@ class SpatialVLAModel:
         self.gripper_action_repeat = 0
         self.sticky_gripper_action = 0.0
         self.previous_gripper_action = None
-        
+
         self.rollout_step_counter = 0
-        
+
     def _resize_image(self, image: np.ndarray) -> np.ndarray:
         image = cv.resize(image, tuple(self.image_size), interpolation=cv.INTER_AREA)
         return image
-    
+
     def _add_image_to_history(self, image: np.ndarray) -> None:
         if len(self.image_history) == 0:
             self.image_history.extend([image] * self.obs_horizon)
         else:
             self.image_history.append(image)
-            
+
     def _obtain_image_history(self) -> List[Image.Image]:
         image_history = list(self.image_history)
         images = image_history[:: self.obs_interval]
@@ -124,7 +128,9 @@ class SpatialVLAModel:
         return images
 
     def preprocess(self, obs):
-        obs["image"]["camera_1"] = obs["image"]["camera_1"].squeeze().cpu().detach() # (224, 224, 3)
+        obs["image"]["camera_1"] = (
+            obs["image"]["camera_1"].squeeze().cpu().detach()
+        )  # (224, 224, 3)
         # preprocess image
         image = obs["image"]["camera_1"].numpy()
         assert image.dtype == np.uint8
@@ -143,14 +149,20 @@ class SpatialVLAModel:
         """Step function."""
         images = self.preprocess(obs)
         prompt = self.task_name
-        
+
         # predict action (7-dof; un-normalize for bridgev2)
         start = time.time()
-        inputs = self.processor(images=images, text=prompt, unnorm_key=self.unnorm_key, return_tensors="pt", do_normalize=False)
+        inputs = self.processor(
+            images=images,
+            text=prompt,
+            unnorm_key=self.unnorm_key,
+            return_tensors="pt",
+            do_normalize=False,
+        )
         with torch.no_grad():
             if hasattr(self.processor, "action_tokenizer"):
                 generation_outputs = self.vla.predict_action(inputs)
-                
+
                 raw_actions = self.processor.decode_actions(
                     generation_outputs=generation_outputs,
                     unnorm_key=self.unnorm_key,
@@ -160,7 +172,7 @@ class SpatialVLAModel:
                 raw_actions = raw_actions.cpu().numpy()
         # cal policy infer time
         print("**** SpatialVLA inference time: ", time.time() - start)
-        
+
         if self.action_ensemble:
             print("ensemble action!!!")
             raw_actions = self.action_ensembler.ensemble_action(raw_actions)[None]
@@ -171,8 +183,17 @@ class SpatialVLAModel:
 
         # convert rot from euler to quat
         from maniunicon.utils.vla_utils import euler_pose_to_quat
+
         N, A = raw_actions.shape
-        raw_actions = np.concatenate([euler_pose_to_quat(raw_actions[..., :-1].reshape(-1, A-1)).reshape(N, -1), raw_actions[..., -1:]], axis=-1)
+        raw_actions = np.concatenate(
+            [
+                euler_pose_to_quat(raw_actions[..., :-1].reshape(-1, A - 1)).reshape(
+                    N, -1
+                ),
+                raw_actions[..., -1:],
+            ],
+            axis=-1,
+        )
         print(f"step {self.rollout_step_counter} action {raw_actions}")
-        
+
         return raw_actions
