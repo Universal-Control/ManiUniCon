@@ -339,7 +339,7 @@ If you use ManiUniCon in your research, please cite:
 ```bibtex
 @software{maniunicon2025,
   title={ManiUniCon: A Unified Control Interface for Robotic Manipulation},
-  author={Zhu, Zhengbang and Liu, Minghuan and Han, Xiaoshen},
+  author={Zhu, Zhengbang and Liu, Minghuan and Han, Xiaoshen and Zhang, Zhengshen},
   year={2025},
   url={https://github.com/Universal-Control/ManiUniCon}
 }
