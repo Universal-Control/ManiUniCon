@@ -4,6 +4,7 @@ from queue import Empty
 import numbers
 import time
 from multiprocessing.managers import SharedMemoryManager
+from multiprocessing import Lock
 import numpy as np
 
 from maniunicon.utils.shared_memory.shared_ndarray import SharedNDArray
@@ -15,8 +16,11 @@ from maniunicon.utils.shared_memory.shared_memory_util import (
 
 class SharedMemoryRingBuffer:
     """
-    A Lock-Free FILO Shared Memory Data Structure.
+    A thread-safe LIFO Shared Memory Ring Buffer.
     Stores a sequence of dict of numpy arrays.
+
+    Note: This implementation uses locks to ensure thread-safety for
+    concurrent multi-producer/multi-consumer access patterns.
     """
 
     def __init__(
@@ -70,6 +74,9 @@ class SharedMemoryRingBuffer:
             mem_mgr=shm_manager, shape=(buffer_size,), dtype=np.float64
         )
         timestamp_array.get()[:] = -np.inf
+
+        # Create lock for thread-safe write access
+        self._write_lock = Lock()
 
         self.buffer_size = buffer_size
         self.array_specs = array_specs
@@ -125,45 +132,46 @@ class SharedMemoryRingBuffer:
     def put(
         self, data: Dict[str, Union[np.ndarray, numbers.Number]], wait: bool = True
     ):
-        count = self.counter.load()
-        next_idx = count % self.buffer_size
-        # Make sure the next self.get_max_k elements in the ring buffer have at least
-        # self.get_time_budget seconds untouched after written, so that
-        # get_last_k can safely read k elements from any count location.
-        # Sanity check: when get_max_k == 1, the element pointed by next_idx
-        # should be rewritten at minimum self.get_time_budget seconds later.
-        timestamp_lookahead_idx = (next_idx + self.get_max_k - 1) % self.buffer_size
-        old_timestamp = self.timestamp_array.get()[timestamp_lookahead_idx]
-        t = time.monotonic()
-        if (t - old_timestamp) < self.get_time_budget:
-            deltat = t - old_timestamp
-            if wait:
-                # sleep the remaining time to be safe
-                time.sleep(self.get_time_budget - deltat)
-            else:
-                # throw an error
-                past_iters = self.buffer_size - self.get_max_k
-                hz = past_iters / deltat
-                raise TimeoutError(
-                    "Put executed too fast {}items/{:.4f}s ~= {}Hz".format(
-                        past_iters, deltat, hz
+        with self._write_lock:
+            count = self.counter.load()
+            next_idx = count % self.buffer_size
+            # Make sure the next self.get_max_k elements in the ring buffer have at least
+            # self.get_time_budget seconds untouched after written, so that
+            # get_last_k can safely read k elements from any count location.
+            # Sanity check: when get_max_k == 1, the element pointed by next_idx
+            # should be rewritten at minimum self.get_time_budget seconds later.
+            timestamp_lookahead_idx = (next_idx + self.get_max_k - 1) % self.buffer_size
+            old_timestamp = self.timestamp_array.get()[timestamp_lookahead_idx]
+            t = time.monotonic()
+            if (t - old_timestamp) < self.get_time_budget:
+                deltat = t - old_timestamp
+                if wait:
+                    # sleep the remaining time to be safe
+                    time.sleep(self.get_time_budget - deltat)
+                else:
+                    # throw an error
+                    past_iters = self.buffer_size - self.get_max_k
+                    hz = past_iters / deltat
+                    raise TimeoutError(
+                        "Put executed too fast {}items/{:.4f}s ~= {}Hz".format(
+                            past_iters, deltat, hz
+                        )
                     )
-                )
 
-        # write to shared memory
-        for key, value in data.items():
-            if value is None:
-                continue
-            arr: np.ndarray
-            arr = self.shared_arrays[key].get()
-            if isinstance(value, np.ndarray):
-                arr[next_idx] = value
-            else:
-                arr[next_idx] = np.array(value, dtype=arr.dtype)
+            # write to shared memory
+            for key, value in data.items():
+                if value is None:
+                    continue
+                arr: np.ndarray
+                arr = self.shared_arrays[key].get()
+                if isinstance(value, np.ndarray):
+                    arr[next_idx] = value
+                else:
+                    arr[next_idx] = np.array(value, dtype=arr.dtype)
 
-        # update timestamp
-        self.timestamp_array.get()[next_idx] = time.monotonic()
-        self.counter.add(1)
+            # update timestamp (use the same time for consistency)
+            self.timestamp_array.get()[next_idx] = t
+            self.counter.add(1)
 
     def _allocate_empty(self, k=None):
         result = dict()

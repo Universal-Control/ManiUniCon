@@ -472,7 +472,10 @@ class Robot(mp.Process):
         self.robot_interface.stop()
         self.robot_interface.disconnect()
         if self.state_thread is not None:
-            self.state_thread.join()
+            # Use timeout to prevent indefinite blocking
+            self.state_thread.join(timeout=5.0)
+            if self.state_thread.is_alive():
+                print("Warning: State receiver thread did not terminate within timeout")
 
     def stop(self):
         """Stop the controller process and all threads."""
