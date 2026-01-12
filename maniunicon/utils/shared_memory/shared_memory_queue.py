@@ -2,6 +2,7 @@ from typing import Dict, List, Union
 import numbers
 from queue import Empty, Full
 from multiprocessing.managers import SharedMemoryManager
+from multiprocessing import Lock
 import numpy as np
 
 from maniunicon.utils.shared_memory.shared_memory_util import (
@@ -13,8 +14,11 @@ from maniunicon.utils.shared_memory.shared_ndarray import SharedNDArray
 
 class SharedMemoryQueue:
     """
-    A Lock-Free FIFO Shared Memory Data Structure.
+    A thread-safe FIFO Shared Memory Data Structure.
     Stores a sequence of dict of numpy arrays.
+
+    Note: This implementation uses locks to ensure thread-safety for
+    concurrent multi-producer/multi-consumer access patterns.
     """
 
     def __init__(
@@ -26,6 +30,10 @@ class SharedMemoryQueue:
         # create atomic counter
         write_counter = SharedAtomicCounter(shm_manager)
         read_counter = SharedAtomicCounter(shm_manager)
+
+        # Create locks for thread-safe access
+        self._write_lock = Lock()
+        self._read_lock = Lock()
 
         # allocate shared memory
         shared_arrays = dict()
@@ -86,67 +94,71 @@ class SharedMemoryQueue:
         self.read_counter.store(self.write_counter.load())
 
     def put(self, data: Dict[str, Union[np.ndarray, numbers.Number]]):
-        read_count = self.read_counter.load()
-        write_count = self.write_counter.load()
-        n_data = write_count - read_count
-        if n_data >= self.buffer_size:
-            raise Full()
+        with self._write_lock:
+            read_count = self.read_counter.load()
+            write_count = self.write_counter.load()
+            n_data = write_count - read_count
+            if n_data >= self.buffer_size:
+                raise Full()
 
-        next_idx = write_count % self.buffer_size
+            next_idx = write_count % self.buffer_size
 
-        # write to shared memory
-        for key, value in data.items():
-            arr: np.ndarray
-            arr = self.shared_arrays[key].get()
-            if isinstance(value, np.ndarray):
-                arr[next_idx] = value
-            else:
-                arr[next_idx] = np.array(value, dtype=arr.dtype)
+            # write to shared memory
+            for key, value in data.items():
+                arr: np.ndarray
+                arr = self.shared_arrays[key].get()
+                if isinstance(value, np.ndarray):
+                    arr[next_idx] = value
+                else:
+                    arr[next_idx] = np.array(value, dtype=arr.dtype)
 
-        # update idx
-        self.write_counter.add(1)
+            # update idx
+            self.write_counter.add(1)
 
     def get(self, out=None) -> Dict[str, np.ndarray]:
-        write_count = self.write_counter.load()
-        read_count = self.read_counter.load()
-        n_data = write_count - read_count
-        if n_data <= 0:
-            raise Empty()
+        with self._read_lock:
+            write_count = self.write_counter.load()
+            read_count = self.read_counter.load()
+            n_data = write_count - read_count
+            if n_data <= 0:
+                raise Empty()
 
-        if out is None:
-            out = self._allocate_empty()
+            if out is None:
+                out = self._allocate_empty()
 
-        next_idx = read_count % self.buffer_size
-        for key, value in self.shared_arrays.items():
-            arr = value.get()
-            np.copyto(out[key], arr[next_idx])
+            next_idx = read_count % self.buffer_size
+            for key, value in self.shared_arrays.items():
+                arr = value.get()
+                np.copyto(out[key], arr[next_idx])
 
-        # update idx
-        self.read_counter.add(1)
-        return out
+            # update idx
+            self.read_counter.add(1)
+            return out
 
     def get_k(self, k, out=None) -> Dict[str, np.ndarray]:
-        write_count = self.write_counter.load()
-        read_count = self.read_counter.load()
-        n_data = write_count - read_count
-        if n_data <= 0:
-            raise Empty()
-        assert k <= n_data
+        with self._read_lock:
+            write_count = self.write_counter.load()
+            read_count = self.read_counter.load()
+            n_data = write_count - read_count
+            if n_data <= 0:
+                raise Empty()
+            assert k <= n_data
 
-        out = self._get_k_impl(k, read_count, out=out)
-        self.read_counter.add(k)
-        return out
+            out = self._get_k_impl(k, read_count, out=out)
+            self.read_counter.add(k)
+            return out
 
     def get_all(self, out=None) -> Dict[str, np.ndarray]:
-        write_count = self.write_counter.load()
-        read_count = self.read_counter.load()
-        n_data = write_count - read_count
-        if n_data <= 0:
-            raise Empty()
+        with self._read_lock:
+            write_count = self.write_counter.load()
+            read_count = self.read_counter.load()
+            n_data = write_count - read_count
+            if n_data <= 0:
+                raise Empty()
 
-        out = self._get_k_impl(n_data, read_count, out=out)
-        self.read_counter.add(n_data)
-        return out
+            out = self._get_k_impl(n_data, read_count, out=out)
+            self.read_counter.add(n_data)
+            return out
 
     def _get_k_impl(self, k, read_count, out=None) -> Dict[str, np.ndarray]:
         if out is None:

@@ -113,12 +113,13 @@ class FRANKAInterface(RobotInterface):
             return False
 
     def disconnect(self) -> bool:
-        """Disconnect from the UR5 robot."""
+        """Disconnect from the Franka robot."""
         try:
             if self.robot is not None:
                 del self.robot
-                del self.gripper
                 self.robot = None
+            if self.gripper is not None:
+                del self.gripper
                 self.gripper = None
 
             self.ik_solver = None
@@ -326,8 +327,8 @@ class FRANKAInterface(RobotInterface):
             return False
 
         try:
-            self.robot_c.stopScript()
-            self.robot_c.unlockProtectiveStop()
+            if self.robot is not None:
+                self.robot.recover_from_errors()
             self._error_state = False
             return True
         except Exception as e:

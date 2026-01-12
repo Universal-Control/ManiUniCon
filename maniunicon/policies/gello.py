@@ -107,7 +107,24 @@ class GelloPolicy(BasePolicy):
             Clipped joint positions
         """
         clipped_positions = target_positions.copy()
-        return clipped_positions  # temp disable
+
+        # Apply joint position limits if configured
+        if self.joint_limits is not None:
+            if "min" in self.joint_limits and self.joint_limits["min"] is not None:
+                min_limits = np.array(self.joint_limits["min"])
+                clipped_positions = np.maximum(clipped_positions, min_limits)
+            if "max" in self.joint_limits and self.joint_limits["max"] is not None:
+                max_limits = np.array(self.joint_limits["max"])
+                clipped_positions = np.minimum(clipped_positions, max_limits)
+
+        # Apply velocity limits to prevent sudden large movements
+        if current_positions is not None and self.joint_velocity_limit > 0:
+            delta = clipped_positions - current_positions
+            max_delta = self.joint_velocity_limit * self.dt
+            delta = np.clip(delta, -max_delta, max_delta)
+            clipped_positions = current_positions + delta
+
+        return clipped_positions
 
     def sync_state(self):
         """Sync the robot state with shared storage."""

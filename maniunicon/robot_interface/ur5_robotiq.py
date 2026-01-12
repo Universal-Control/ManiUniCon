@@ -101,13 +101,15 @@ class UR5RobotiqInterface(RobotInterface):
         if self.robot_c is not None:
             print("init!")
             self.robot_c.servoStop()
+            init_qvel = self.config.get("init_qvel", self.velocity)
             self.robot_c.moveJ(
                 self.config["init_qpos"],
-                self.config["init_qvel"],
+                init_qvel,
                 1.4,
             )
             self.robot_c.stopJ()
-            self.gripper.open()
+            if self.gripper is not None:
+                self.gripper.open()
             self.gripper_state = np.array([0.0])  # Gripper open state
             print("init finished!")
             return True
@@ -117,9 +119,10 @@ class UR5RobotiqInterface(RobotInterface):
         if self.robot_c is not None:
             print(f"moving to joint positions {joint_positions}")
             self.robot_c.servoStop()
+            init_qvel = self.config.get("init_qvel", self.velocity)
             self.robot_c.moveJ(
                 joint_positions,
-                self.config["init_qvel"],
+                init_qvel,
                 1.4,
             )
             self.robot_c.stopJ()
@@ -279,7 +282,7 @@ class UR5RobotiqInterface(RobotInterface):
             # You can add specific UR5 error checking here
             # For example, check robot mode, safety status, etc.
             return self._error_state
-        except:
+        except Exception:
             return True
 
     def clear_error(self) -> bool:
@@ -288,8 +291,9 @@ class UR5RobotiqInterface(RobotInterface):
             return False
 
         try:
-            self.robot_c.stopScript()
-            self.robot_c.unlockProtectiveStop()
+            if self.robot_c is not None:
+                self.robot_c.stopScript()
+                self.robot_c.unlockProtectiveStop()
             self._error_state = False
             return True
         except Exception as e:

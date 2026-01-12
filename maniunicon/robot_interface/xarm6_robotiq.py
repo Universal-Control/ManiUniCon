@@ -163,13 +163,13 @@ class XArm6RobotiqInterface(RobotInterface):
             try:
                 joint_velocities = np.array(self.arm.get_joint_speed()[1])
                 joint_velocities = np.deg2rad(joint_velocities)  # Convert to rad/s
-            except:
+            except (AttributeError, IndexError, TypeError):
                 joint_velocities = np.zeros_like(joint_positions)
 
             # Get joint torques (XArm API might not provide this directly)
             try:
                 joint_torques = np.array(self.arm.get_joint_torque()[1])
-            except:
+            except (AttributeError, IndexError, TypeError):
                 joint_torques = np.zeros_like(joint_positions)
 
             # Get TCP pose using IK solver
@@ -294,7 +294,7 @@ class XArm6RobotiqInterface(RobotInterface):
                 if state[1] in [4, 5, 6]:
                     return True
             return self._error_state
-        except:
+        except Exception:
             return True
 
     def clear_error(self) -> bool:
